@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, Pod } from "@/types";
 
@@ -325,7 +326,7 @@ export default function TeacherDashboard() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <div
                     style={{
                       background: "#F0FAFA",
@@ -363,6 +364,17 @@ export default function TeacherDashboard() {
                   >
                     {copied ? "✓ Copied!" : "Copy"}
                   </button>
+                  <Link
+                    href={`/dashboard/teacher/students?podId=${pod.id}`}
+                    className="btn-secondary"
+                    style={{
+                      padding: "0.5rem 0.875rem",
+                      fontSize: "0.875rem",
+                      textDecoration: "none",
+                    }}
+                  >
+                    🎒 View Students
+                  </Link>
                 </div>
               </div>
             ))}
