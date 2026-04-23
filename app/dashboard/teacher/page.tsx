@@ -4,8 +4,23 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, Pod } from "@/types";
+
+function navLinkStyle(active: boolean): React.CSSProperties {
+  return {
+    color: active ? "#028090" : "#64748B",
+    fontWeight: active ? 600 : 400,
+    fontSize: "0.9375rem",
+    padding: "0 1rem",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    borderBottom: active ? "2px solid #028090" : "2px solid transparent",
+    textDecoration: "none",
+  };
+}
 
 interface PodWithCount extends Pod {
   memberCount: number;
@@ -16,6 +31,7 @@ export default function TeacherDashboard() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [pods, setPods] = useState<PodWithCount[]>([]);
+  const [totalGoals, setTotalGoals] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newClassName, setNewClassName] = useState("");
@@ -48,6 +64,13 @@ export default function TeacherDashboard() {
 
       setProfile(profileData);
       await loadPodsFor(supabase, user.id);
+
+      const { count } = await supabase
+        .from("goals")
+        .select("*", { count: "exact", head: true })
+        .eq("teacher_id", user.id);
+      setTotalGoals(count ?? 0);
+
       setLoading(false);
     }
     load();
@@ -185,6 +208,32 @@ export default function TeacherDashboard() {
         </div>
       </header>
 
+      {/* Nav */}
+      <nav
+        style={{
+          background: "white",
+          borderBottom: "1px solid #E2E8F0",
+          padding: "0 2rem",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1000px",
+            margin: "0 auto",
+            display: "flex",
+            height: "48px",
+            alignItems: "stretch",
+          }}
+        >
+          <Link href="/dashboard/teacher" style={navLinkStyle(true)}>
+            Dashboard
+          </Link>
+          <Link href="/dashboard/teacher/students" style={navLinkStyle(false)}>
+            My Students
+          </Link>
+        </div>
+      </nav>
+
       <main style={{ maxWidth: "1000px", margin: "0 auto", padding: "2rem 1.5rem" }}>
         {/* Welcome */}
         <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
@@ -232,9 +281,9 @@ export default function TeacherDashboard() {
               color: "#7C3AED",
             },
             {
-              label: "Active Pods",
-              value: pods.filter((p) => p.type === "class").length,
-              icon: "📚",
+              label: "Goals Created",
+              value: totalGoals,
+              icon: "🎯",
               color: "#D97706",
             },
           ].map((stat) => (
@@ -325,7 +374,7 @@ export default function TeacherDashboard() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <div
                     style={{
                       background: "#F0FAFA",
@@ -363,6 +412,17 @@ export default function TeacherDashboard() {
                   >
                     {copied ? "✓ Copied!" : "Copy"}
                   </button>
+                  <Link
+                    href={`/dashboard/teacher/students?podId=${pod.id}`}
+                    className="btn-secondary"
+                    style={{
+                      padding: "0.5rem 0.875rem",
+                      fontSize: "0.875rem",
+                      textDecoration: "none",
+                    }}
+                  >
+                    🎒 View Students
+                  </Link>
                 </div>
               </div>
             ))}
