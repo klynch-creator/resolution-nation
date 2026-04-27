@@ -140,6 +140,7 @@ export default function TeacherStudentGoalsPage() {
   const [student, setStudent] = useState<Profile | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmedUploadId, setConfirmedUploadId] = useState<string | null>(null);
 
   const [form, setForm] = useState<GoalFormState>(defaultForm);
   const [saving, setSaving] = useState(false);
@@ -179,6 +180,19 @@ export default function TeacherStudentGoalsPage() {
         .single();
 
       if (studentData) setStudent(studentData);
+
+      // Check for a confirmed report card upload
+      const { data: upload } = await supabase
+        .from("student_data_uploads")
+        .select("id")
+        .eq("student_id", studentId)
+        .eq("teacher_id", user.id)
+        .eq("status", "confirmed")
+        .order("uploaded_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (upload) setConfirmedUploadId(upload.id);
 
       await loadGoals(supabase, user.id);
       setLoading(false);
@@ -424,13 +438,34 @@ export default function TeacherStudentGoalsPage() {
               </p>
             </div>
           </div>
-          <Link
-            href={`/dashboard/teacher/students/${studentId}/upload`}
-            className="btn-secondary"
-            style={{ textDecoration: "none", fontSize: "0.875rem" }}
-          >
-            📄 Upload Report Card
-          </Link>
+          <div className="flex gap-2 flex-wrap">
+            {confirmedUploadId && (
+              <Link
+                href={`/dashboard/teacher/students/${studentId}/goals/review?uploadId=${confirmedUploadId}`}
+                style={{
+                  textDecoration: "none",
+                  fontSize: "0.875rem",
+                  background: "linear-gradient(135deg, #028090, #02C39A)",
+                  color: "white",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "8px",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.375rem",
+                }}
+              >
+                ✨ Generate Goals with AI
+              </Link>
+            )}
+            <Link
+              href={`/dashboard/teacher/students/${studentId}/upload`}
+              className="btn-secondary"
+              style={{ textDecoration: "none", fontSize: "0.875rem" }}
+            >
+              📄 Upload Report Card
+            </Link>
+          </div>
         </div>
 
         <div
@@ -606,9 +641,28 @@ export default function TeacherStudentGoalsPage() {
                 }}
               >
                 <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🎯</div>
-                <p style={{ fontSize: "0.9375rem" }}>
+                <p style={{ fontSize: "0.9375rem", marginBottom: confirmedUploadId ? "1rem" : 0 }}>
                   No goals yet. Add the first goal using the form.
                 </p>
+                {confirmedUploadId && (
+                  <Link
+                    href={`/dashboard/teacher/students/${studentId}/goals/review?uploadId=${confirmedUploadId}`}
+                    style={{
+                      textDecoration: "none",
+                      fontSize: "0.875rem",
+                      background: "linear-gradient(135deg, #028090, #02C39A)",
+                      color: "white",
+                      padding: "0.5rem 1.25rem",
+                      borderRadius: "8px",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                    }}
+                  >
+                    ✨ Generate Goals with AI
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="flex flex-col gap-3">

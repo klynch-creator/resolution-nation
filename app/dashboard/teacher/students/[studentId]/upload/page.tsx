@@ -352,7 +352,9 @@ export default function UploadPage() {
       .update({ extracted_data: extractedData, status: "confirmed" })
       .eq("id", uploadRecordId);
 
-    router.push(`/dashboard/teacher/students/${studentId}/goals`);
+    router.push(
+      `/dashboard/teacher/students/${studentId}/goals/review?uploadId=${uploadRecordId}`
+    );
   }
 
   function handleStartOver() {
@@ -691,7 +693,7 @@ export default function UploadPage() {
               >
                 {pageState === "confirming"
                   ? "Saving…"
-                  : "Looks good — Generate Goals"}
+                  : "✨ Looks good — Generate Goals"}
               </button>
             </div>
           </div>
