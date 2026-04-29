@@ -349,8 +349,8 @@ export default function StudentRoadmapPage() {
                           </div>
 
                           {isActive && (
-                            <button
-                              disabled
+                            <Link
+                              href={`/dashboard/student/goals/${goalId}/roadmap/${step.id}/workout`}
                               style={{
                                 background: "linear-gradient(135deg, #028090, #02C39A)",
                                 color: "white",
@@ -359,13 +359,15 @@ export default function StudentRoadmapPage() {
                                 padding: "0.625rem 1.25rem",
                                 fontSize: "0.9375rem",
                                 fontWeight: 700,
-                                cursor: "default",
+                                cursor: "pointer",
                                 flexShrink: 0,
-                                opacity: 0.8,
+                                textDecoration: "none",
+                                display: "inline-flex",
+                                alignItems: "center",
                               }}
                             >
                               Start Workout →
-                            </button>
+                            </Link>
                           )}
 
                           {isCompleted && (
