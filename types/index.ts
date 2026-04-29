@@ -65,6 +65,48 @@ export interface ExtractedReportCard {
   overall_notes: string | null;
 }
 
+export type RoadmapStatus = "draft" | "pending_approval" | "approved" | "archived";
+export type StepStatus = "locked" | "active" | "completed";
+export type WorkoutType = "lesson" | "practice" | "quiz" | "test-prep";
+
+export interface RoadmapQuestion {
+  difficulty: "easy" | "medium" | "hard";
+  question: string;
+  options: string[];
+  correct_index: number;
+  hint: string;
+}
+
+export interface StepActivities {
+  questions: RoadmapQuestion[];
+}
+
+export interface RoadmapStep {
+  id: string;
+  roadmap_id: string;
+  step_order: number;
+  title: string;
+  description: string | null;
+  workout_type: WorkoutType | null;
+  activities: StepActivities | null;
+  standard_alignment: string | null;
+  star_reward: number;
+  status: StepStatus;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface LearningRoadmap {
+  id: string;
+  goal_id: string;
+  student_id: string;
+  teacher_id: string | null;
+  status: RoadmapStatus;
+  approved_at: string | null;
+  created_at: string;
+  roadmap_steps?: RoadmapStep[];
+}
+
 export interface StudentDataUpload {
   id: string;
   student_id: string;

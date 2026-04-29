@@ -12,6 +12,8 @@ import type {
   GoalPriority,
   GoalStatus,
   GoalSubject,
+  LearningRoadmap,
+  RoadmapStatus,
 } from "@/types";
 
 const SUBJECTS: GoalSubject[] = [
@@ -99,6 +101,30 @@ function statusBadge(status: GoalStatus) {
   );
 }
 
+function roadmapStatusBadge(status: RoadmapStatus) {
+  const map: Record<RoadmapStatus, { bg: string; color: string; label: string }> = {
+    draft: { bg: "#FFF7ED", color: "#D97706", label: "Draft" },
+    pending_approval: { bg: "#EFF6FF", color: "#2563EB", label: "Pending" },
+    approved: { bg: "#ECFDF5", color: "#059669", label: "Approved" },
+    archived: { bg: "#F3F4F6", color: "#6B7280", label: "Archived" },
+  };
+  const s = map[status];
+  return (
+    <span
+      style={{
+        background: s.bg,
+        color: s.color,
+        borderRadius: "100px",
+        padding: "0.125rem 0.625rem",
+        fontSize: "0.75rem",
+        fontWeight: 600,
+      }}
+    >
+      🗺 {s.label}
+    </span>
+  );
+}
+
 function navLinkStyle(active: boolean): React.CSSProperties {
   return {
     color: active ? "#028090" : "#64748B",
@@ -144,6 +170,9 @@ export default function TeacherStudentGoalsPage() {
   const [form, setForm] = useState<GoalFormState>(defaultForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [roadmaps, setRoadmaps] = useState<Record<string, LearningRoadmap>>({});
+  const [generatingGoalId, setGeneratingGoalId] = useState<string | null>(null);
 
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [editForm, setEditForm] = useState<GoalFormState>(defaultForm);
@@ -196,7 +225,52 @@ export default function TeacherStudentGoalsPage() {
       .eq("student_id", studentId)
       .eq("teacher_id", teacherId)
       .order("created_at", { ascending: false });
-    setGoals((data as Goal[]) ?? []);
+    const goalList = (data as Goal[]) ?? [];
+    setGoals(goalList);
+
+    if (goalList.length > 0) {
+      await loadRoadmaps(supabase, goalList.map((g) => g.id));
+    }
+  }
+
+  async function loadRoadmaps(
+    supabase: ReturnType<typeof createClient>,
+    goalIds: string[]
+  ) {
+    const { data } = await supabase
+      .from("learning_roadmaps")
+      .select("*")
+      .in("goal_id", goalIds);
+    if (data) {
+      const map: Record<string, LearningRoadmap> = {};
+      (data as LearningRoadmap[]).forEach((r) => {
+        map[r.goal_id] = r;
+      });
+      setRoadmaps(map);
+    }
+  }
+
+  async function handleCreateRoadmap(goal: Goal) {
+    setGeneratingGoalId(goal.id);
+    try {
+      const res = await fetch("/api/generate-roadmap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId: goal.id, studentId }),
+      });
+      if (res.ok) {
+        router.push(
+          `/dashboard/teacher/students/${studentId}/goals/${goal.id}/roadmap`
+        );
+      } else {
+        const { error } = await res.json();
+        alert(error ?? "Failed to generate roadmap. Please try again.");
+        setGeneratingGoalId(null);
+      }
+    } catch {
+      alert("Failed to generate roadmap. Please try again.");
+      setGeneratingGoalId(null);
+    }
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -230,6 +304,7 @@ export default function TeacherStudentGoalsPage() {
     setForm(defaultForm);
     setSaving(false);
     await loadGoals(supabase, user.id);
+    // roadmaps reloaded inside loadGoals
   }
 
   async function handleDelete(goalId: string) {
@@ -669,6 +744,59 @@ export default function TeacherStudentGoalsPage() {
                         )}
                       </div>
                     )}
+
+                    {/* Roadmap row */}
+                    <div
+                      className="flex items-center gap-2 flex-wrap"
+                      style={{ marginBottom: "0.75rem" }}
+                    >
+                      {roadmaps[goal.id]
+                        ? roadmapStatusBadge(roadmaps[goal.id].status)
+                        : (
+                          <span
+                            style={{
+                              background: "#F3F4F6",
+                              color: "#9CA3AF",
+                              borderRadius: "100px",
+                              padding: "0.125rem 0.625rem",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            No roadmap
+                          </span>
+                        )}
+                      {roadmaps[goal.id] ? (
+                        <Link
+                          href={`/dashboard/teacher/students/${studentId}/goals/${goal.id}/roadmap`}
+                          style={{
+                            fontSize: "0.8125rem",
+                            color: "#028090",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                          }}
+                        >
+                          View Roadmap →
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => handleCreateRoadmap(goal)}
+                          disabled={generatingGoalId === goal.id}
+                          style={{
+                            background: generatingGoalId === goal.id ? "#E2E8F0" : "#028090",
+                            color: generatingGoalId === goal.id ? "#64748B" : "white",
+                            border: "none",
+                            borderRadius: "100px",
+                            padding: "0.25rem 0.75rem",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: generatingGoalId === goal.id ? "default" : "pointer",
+                          }}
+                        >
+                          {generatingGoalId === goal.id ? "✨ Building…" : "✨ Create Roadmap"}
+                        </button>
+                      )}
+                    </div>
 
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">

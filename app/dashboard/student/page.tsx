@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import type { Profile, Pod } from "@/types";
+import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -14,6 +14,8 @@ export default function StudentDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [classroom, setClassroom] = useState<Pod | null>(null);
   const [starBalance, setStarBalance] = useState(0);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [roadmaps, setRoadmaps] = useState<Record<string, LearningRoadmap>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -60,11 +62,7 @@ export default function StudentDashboard() {
 
       if (stars) {
         const balance = stars.reduce((sum, tx) => {
-          if (
-            tx.type === "earned" ||
-            tx.type === "bonus" ||
-            tx.type === "gift_received"
-          ) {
+          if (tx.type === "earned" || tx.type === "bonus" || tx.type === "gift_received") {
             return sum + tx.amount;
           }
           if (tx.type === "gift_sent" || tx.type === "purchase") {
@@ -73,6 +71,33 @@ export default function StudentDashboard() {
           return sum;
         }, 0);
         setStarBalance(balance);
+      }
+
+      // Get goals
+      const { data: goalsData } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("student_id", user.id)
+        .order("created_at", { ascending: false });
+
+      const goalList = (goalsData as Goal[]) ?? [];
+      setGoals(goalList);
+
+      // Get approved roadmaps
+      if (goalList.length > 0) {
+        const { data: roadmapData } = await supabase
+          .from("learning_roadmaps")
+          .select("*")
+          .in("goal_id", goalList.map((g) => g.id))
+          .eq("status", "approved");
+
+        if (roadmapData) {
+          const map: Record<string, LearningRoadmap> = {};
+          (roadmapData as LearningRoadmap[]).forEach((r) => {
+            map[r.goal_id] = r;
+          });
+          setRoadmaps(map);
+        }
       }
 
       setLoading(false);
@@ -206,8 +231,8 @@ export default function StudentDashboard() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
             { label: "My Stars", value: starBalance, icon: "⭐", color: "#D97706" },
-            { label: "My Goals", value: 0, icon: "🎯", color: "#028090" },
-            { label: "Workouts Done", value: 0, icon: "🏋️", color: "#7C3AED" },
+            { label: "My Goals", value: goals.length, icon: "🎯", color: "#028090" },
+            { label: "Roadmaps", value: Object.keys(roadmaps).length, icon: "🗺", color: "#7C3AED" },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -237,34 +262,92 @@ export default function StudentDashboard() {
 
         {/* My Goals */}
         <div className="card mb-6">
-          <h2
-            style={{
-              fontFamily: "Georgia, serif",
-              fontSize: "1.25rem",
-              fontWeight: 700,
-              color: "#0C2340",
-              marginBottom: "1rem",
-            }}
-          >
-            My Goals 🎯
-          </h2>
-          <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "#64748B" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎯</div>
-            <p
+          <div className="flex items-center justify-between" style={{ marginBottom: "1rem" }}>
+            <h2
               style={{
-                fontSize: "1.125rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.5rem",
+                fontFamily: "Georgia, serif",
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                color: "#0C2340",
               }}
             >
-              No goals yet!
-            </p>
-            <p style={{ fontSize: "1rem", lineHeight: 1.6 }}>
-              Your teacher will add goals for you soon, or you can set your own personal
-              goals. Once you have goals, your learning journey begins here!
-            </p>
+              My Goals 🎯
+            </h2>
+            {goals.length > 0 && (
+              <Link
+                href="/dashboard/student/goals"
+                style={{ fontSize: "0.875rem", color: "#028090", fontWeight: 600, textDecoration: "none" }}
+              >
+                See all →
+              </Link>
+            )}
           </div>
+
+          {goals.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "#64748B" }}>
+              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎯</div>
+              <p style={{ fontSize: "1.125rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem" }}>
+                No goals yet!
+              </p>
+              <p style={{ fontSize: "1rem", lineHeight: 1.6 }}>
+                Your teacher will add goals for you soon. Once you have goals, your learning journey begins here!
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {goals.slice(0, 3).map((goal) => {
+                const roadmap = roadmaps[goal.id];
+                return (
+                  <div
+                    key={goal.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      padding: "0.875rem 1rem",
+                      background: "#F7F9FC",
+                      borderRadius: "10px",
+                      border: "1px solid #E2E8F0",
+                    }}
+                  >
+                    <p style={{ fontSize: "0.9375rem", color: "#0C2340", fontWeight: 500, lineHeight: 1.4, flex: 1 }}>
+                      🎯 {goal.friendly_text}
+                    </p>
+                    {roadmap ? (
+                      <Link
+                        href={`/dashboard/student/goals/${goal.id}/roadmap`}
+                        style={{
+                          background: "#028090",
+                          color: "white",
+                          borderRadius: "8px",
+                          padding: "0.375rem 0.875rem",
+                          fontSize: "0.8125rem",
+                          fontWeight: 600,
+                          textDecoration: "none",
+                          flexShrink: 0,
+                        }}
+                      >
+                        View Roadmap
+                      </Link>
+                    ) : (
+                      <span style={{ fontSize: "0.75rem", color: "#9CA3AF", flexShrink: 0 }}>
+                        Coming soon
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {goals.length > 3 && (
+                <Link
+                  href="/dashboard/student/goals"
+                  style={{ fontSize: "0.875rem", color: "#028090", fontWeight: 600, textDecoration: "none", textAlign: "center", padding: "0.5rem" }}
+                >
+                  +{goals.length - 3} more goals →
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Join classroom prompt */}
