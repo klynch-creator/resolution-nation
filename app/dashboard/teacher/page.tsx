@@ -231,6 +231,9 @@ export default function TeacherDashboard() {
           <Link href="/dashboard/teacher/students" style={navLinkStyle(false)}>
             My Students
           </Link>
+          <Link href="/dashboard/teacher/analytics" style={navLinkStyle(false)}>
+            📊 Analytics
+          </Link>
         </div>
       </nav>
 
@@ -306,6 +309,53 @@ export default function TeacherDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Analytics card */}
+        <Link
+          href="/dashboard/teacher/analytics"
+          style={{ textDecoration: "none" }}
+        >
+          <div
+            className="card"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "1.25rem 1.5rem",
+              marginBottom: "2rem",
+              borderLeft: "4px solid #028090",
+              cursor: "pointer",
+              transition: "box-shadow 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLDivElement).style.boxShadow =
+                "0 4px 12px rgba(2,128,144,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLDivElement).style.boxShadow =
+                "0 1px 4px rgba(0,0,0,0.06)";
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "1.375rem", marginBottom: "0.25rem" }}>📊</div>
+              <p
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontWeight: 700,
+                  fontSize: "1.0625rem",
+                  color: "#0C2340",
+                  marginBottom: "0.2rem",
+                }}
+              >
+                View Class Analytics
+              </p>
+              <p style={{ fontSize: "0.875rem", color: "#64748B" }}>
+                Accuracy trends, adaptive levels, literacy skills, and student roster
+              </p>
+            </div>
+            <span style={{ fontSize: "1.25rem", color: "#028090", flexShrink: 0 }}>→</span>
+          </div>
+        </Link>
 
         {/* Classrooms list */}
         <h2
