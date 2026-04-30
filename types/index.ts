@@ -107,6 +107,30 @@ export interface LearningRoadmap {
   roadmap_steps?: RoadmapStep[];
 }
 
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type ItemType = "card" | "skin" | "gift";
+
+export interface StarStoreItem {
+  id: string;
+  name: string;
+  emoji: string;
+  category: string;
+  rarity: Rarity;
+  star_cost: number;
+  bio: string;
+  item_type: ItemType;
+  is_giftable: boolean;
+}
+
+export interface UserInventory {
+  id: string;
+  user_id: string;
+  item_id: string;
+  acquired_at: string;
+  gifted_from_user_id: string | null;
+  star_store_items?: StarStoreItem;
+}
+
 export interface StudentDataUpload {
   id: string;
   student_id: string;

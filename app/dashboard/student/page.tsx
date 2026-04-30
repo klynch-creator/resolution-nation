@@ -184,6 +184,46 @@ export default function StudentDashboard() {
         </div>
       </header>
 
+      {/* Nav */}
+      <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
+        <div
+          style={{
+            maxWidth: "760px",
+            margin: "0 auto",
+            display: "flex",
+            height: "48px",
+            alignItems: "stretch",
+            gap: "0.25rem",
+          }}
+        >
+          {[
+            { href: "/dashboard/student", label: "Dashboard", active: true },
+            { href: "/dashboard/student/goals", label: "My Goals", active: false },
+            { href: "/dashboard/student/store", label: "⭐ Store", active: false },
+            { href: "/dashboard/student/collection", label: "🃏 Collection", active: false },
+          ].map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              style={{
+                color: link.active ? "#028090" : "#64748B",
+                fontWeight: link.active ? 600 : 400,
+                fontSize: "0.9375rem",
+                padding: "0 1rem",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                borderBottom: link.active ? "2px solid #028090" : "2px solid transparent",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
+
       <main style={{ maxWidth: "760px", margin: "0 auto", padding: "2rem 1.25rem" }}>
         {/* Welcome banner */}
         <div
@@ -348,6 +388,69 @@ export default function StudentDashboard() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Store quick actions */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <Link
+            href="/dashboard/student/store"
+            style={{ textDecoration: "none" }}
+          >
+            <div
+              className="card"
+              style={{
+                background: "linear-gradient(135deg, #D97706 0%, #F59E0B 100%)",
+                padding: "1.25rem",
+                cursor: "pointer",
+                transition: "transform 0.15s, box-shadow 0.15s",
+              }}
+            >
+              <div style={{ fontSize: "2rem", marginBottom: "0.375rem" }}>⭐</div>
+              <div
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontWeight: 700,
+                  color: "white",
+                  fontSize: "1rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Star Store
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.8125rem" }}>
+                {starBalance} stars to spend
+              </div>
+            </div>
+          </Link>
+          <Link
+            href="/dashboard/student/collection"
+            style={{ textDecoration: "none" }}
+          >
+            <div
+              className="card"
+              style={{
+                background: "linear-gradient(135deg, #7C3AED 0%, #9F67FA 100%)",
+                padding: "1.25rem",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ fontSize: "2rem", marginBottom: "0.375rem" }}>🃏</div>
+              <div
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontWeight: 700,
+                  color: "white",
+                  fontSize: "1rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                My Collection
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.8125rem" }}>
+                View your cards
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Join classroom prompt */}
