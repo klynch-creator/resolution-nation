@@ -141,3 +141,71 @@ export interface StudentDataUpload {
   status: UploadStatus;
   uploaded_at: string;
 }
+
+// ─── Phase 10: IEP Tools ───────────────────────────────────────────────────
+
+export type IepArea =
+  | "ELA"
+  | "Math"
+  | "Writing"
+  | "Behavior"
+  | "Social-Emotional"
+  | "Other";
+
+export type IepProgressLevel =
+  | "Emerging"
+  | "Developing"
+  | "Approaching"
+  | "Meeting"
+  | "Exceeding";
+
+export interface IepProgressNote {
+  id: string;
+  progress_note: string;
+  progress_level: IepProgressLevel;
+  data_points: string[];
+  created_at: string;
+}
+
+export interface IepGoal {
+  id: string;
+  student_id: string;
+  teacher_id: string;
+  goal_text: string;
+  area: IepArea;
+  baseline: string | null;
+  target: string | null;
+  measurement: string | null;
+  standard: string | null;
+  progress_notes: IepProgressNote[];
+  shared_with_parent: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Phase 11: Parent Dashboard ───────────────────────────────────────────
+
+export type ParentLinkStatus = "pending" | "approved" | "denied";
+
+export interface ParentStudentLink {
+  id: string;
+  parent_id: string;
+  student_id: string;
+  teacher_id: string | null;
+  status: ParentLinkStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParentMessage {
+  id: string;
+  teacher_id: string;
+  parent_id: string;
+  student_id: string;
+  title: string;
+  body_english: string;
+  body_spanish: string | null;
+  sent_at: string;
+  read_at: string | null;
+  created_at: string;
+}

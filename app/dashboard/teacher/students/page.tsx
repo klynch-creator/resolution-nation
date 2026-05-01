@@ -6,7 +6,12 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile, Pod } from "@/types";
+import type { Profile, Pod, ParentStudentLink } from "@/types";
+
+interface PendingLink extends ParentStudentLink {
+  parent: { id: string; full_name: string } | null;
+  student: { id: string; full_name: string; grade: string | null } | null;
+}
 
 interface StudentRow {
   profile: Profile;
@@ -24,6 +29,8 @@ function StudentsContent() {
   const [teacherProfile, setTeacherProfile] = useState<Profile | null>(null);
   const [classroom, setClassroom] = useState<Pod | null>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [pendingLinks, setPendingLinks] = useState<PendingLink[]>([]);
+  const [approvingLinkId, setApprovingLinkId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -146,6 +153,38 @@ function StudentsContent() {
       });
 
       setStudents(rows);
+
+      // Load pending parent links for this teacher (Phase 11)
+      const { data: linksData } = await supabase
+        .from("parent_student_links")
+        .select("*")
+        .eq("teacher_id", user.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (linksData && linksData.length > 0) {
+        const pParentIds = [...new Set(linksData.map((l: { parent_id: string }) => l.parent_id))];
+        const pStudentIds = [...new Set(linksData.map((l: { student_id: string }) => l.student_id))];
+
+        const [{ data: parentProfs }, { data: studentProfs }] = await Promise.all([
+          supabase.from("profiles").select("id, full_name").in("id", pParentIds),
+          supabase.from("profiles").select("id, full_name, grade").in("id", pStudentIds),
+        ]);
+
+        const parentMap = new Map((parentProfs ?? []).map((p: { id: string; full_name: string }) => [p.id, p]));
+        const studentMap = new Map(
+          (studentProfs ?? []).map((p: { id: string; full_name: string; grade: string | null }) => [p.id, p])
+        );
+
+        setPendingLinks(
+          linksData.map((link: ParentStudentLink) => ({
+            ...link,
+            parent: parentMap.get(link.parent_id) ?? null,
+            student: studentMap.get(link.student_id) ?? null,
+          }))
+        );
+      }
+
       setLoading(false);
     }
     load();
@@ -220,6 +259,19 @@ function StudentsContent() {
     );
   };
 
+  async function handleApproveLink(linkId: string, action: "approve" | "deny") {
+    setApprovingLinkId(linkId);
+    const res = await fetch("/api/approve-parent-link", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linkId, action }),
+    });
+    if (res.ok) {
+      setPendingLinks((prev) => prev.filter((l) => l.id !== linkId));
+    }
+    setApprovingLinkId(null);
+  }
+
   return (
     <div className="min-h-screen" style={{ background: "#F7F9FC" }}>
       {/* Header */}
@@ -276,6 +328,115 @@ function StudentsContent() {
             </p>
           </div>
         </div>
+
+        {/* Pending parent link requests (Phase 11) */}
+        {pendingLinks.length > 0 && (
+          <div className="card mb-6" style={{ borderLeft: "4px solid #D97706" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <span style={{ fontSize: "1.25rem" }}>👪</span>
+              <h2
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "1.125rem",
+                  fontWeight: 700,
+                  color: "#0C2340",
+                }}
+              >
+                Pending Parent Link Requests
+              </h2>
+              <span
+                style={{
+                  background: "#FEF3C7",
+                  color: "#92400E",
+                  borderRadius: "100px",
+                  padding: "0.125rem 0.625rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                }}
+              >
+                {pendingLinks.length}
+              </span>
+            </div>
+            <p
+              style={{
+                fontSize: "0.875rem",
+                color: "#64748B",
+                marginBottom: "1rem",
+              }}
+            >
+              Parents requesting access to view their child&apos;s progress.
+              Approve to grant read-only access, or deny.
+            </p>
+            <div className="flex flex-col gap-3">
+              {pendingLinks.map((link) => (
+                <div
+                  key={link.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "1rem",
+                    padding: "0.875rem 1rem",
+                    background: "#FFFBEB",
+                    borderRadius: "8px",
+                    border: "1px solid #FCD34D",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: "200px" }}>
+                    <p style={{ fontWeight: 600, color: "#0C2340", fontSize: "0.9375rem" }}>
+                      <span style={{ color: "#64748B", fontWeight: 400 }}>Parent: </span>
+                      {link.parent?.full_name ?? "Unknown"}
+                    </p>
+                    <p style={{ fontSize: "0.875rem", color: "#64748B" }}>
+                      <span style={{ fontWeight: 600 }}>Child: </span>
+                      {link.student?.full_name ?? "Unknown"}
+                      {link.student?.grade ? ` · Grade ${link.student.grade}` : ""}
+                    </p>
+                    <p style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: "0.25rem" }}>
+                      Requested{" "}
+                      {new Date(link.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApproveLink(link.id, "approve")}
+                      disabled={approvingLinkId === link.id}
+                      className="btn-primary"
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.875rem",
+                        background:
+                          approvingLinkId === link.id ? "#E2E8F0" : "#028090",
+                      }}
+                    >
+                      {approvingLinkId === link.id ? "…" : "✓ Approve"}
+                    </button>
+                    <button
+                      onClick={() => handleApproveLink(link.id, "deny")}
+                      disabled={approvingLinkId === link.id}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.875rem",
+                        fontWeight: 600,
+                        background: "white",
+                        border: "1.5px solid #FCA5A5",
+                        color: "#DC2626",
+                        borderRadius: "8px",
+                        cursor:
+                          approvingLinkId === link.id ? "default" : "pointer",
+                      }}
+                    >
+                      {approvingLinkId === link.id ? "…" : "✕ Deny"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {students.length === 0 ? (
           <div
