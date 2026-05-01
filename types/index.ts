@@ -107,6 +107,32 @@ export interface LearningRoadmap {
   roadmap_steps?: RoadmapStep[];
 }
 
+export type IepArea = "ELA" | "Math" | "Writing" | "Behavior" | "Social-Emotional" | "Other";
+export type IepProgressLevel = "Emerging" | "Developing" | "Approaching" | "Meeting" | "Exceeding";
+
+export interface IepProgressNote {
+  id: string;
+  progress_note: string;
+  progress_level: IepProgressLevel;
+  data_points: string[];
+  created_at: string;
+}
+
+export interface IepGoal {
+  id: string;
+  student_id: string;
+  teacher_id: string;
+  goal_text: string;
+  area: IepArea;
+  baseline: string | null;
+  target: string | null;
+  measurement: string | null;
+  standard: string | null;
+  progress_notes: IepProgressNote[];
+  created_at: string;
+  updated_at: string;
+}
+
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type ItemType = "card" | "skin" | "gift";
 

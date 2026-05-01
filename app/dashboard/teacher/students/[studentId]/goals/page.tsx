@@ -467,8 +467,17 @@ export default function TeacherStudentGoalsPage() {
             My Students
           </Link>
           <span style={{ ...navLinkStyle(true), cursor: "default" }}>
-            {student?.full_name ?? "Student"}&apos;s Goals
+            Goals
           </span>
+          <Link href={`/dashboard/teacher/students/${studentId}/upload`} style={navLinkStyle(false)}>
+            Upload
+          </Link>
+          <Link href={`/dashboard/teacher/students/${studentId}/analytics`} style={navLinkStyle(false)}>
+            Analytics
+          </Link>
+          <Link href={`/dashboard/teacher/students/${studentId}/iep`} style={{ ...navLinkStyle(false), whiteSpace: "nowrap" }}>
+            📋 IEP Tools
+          </Link>
         </div>
       </nav>
 

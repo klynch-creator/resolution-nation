@@ -356,18 +356,32 @@ function StudentsContent() {
                       {uploadBadge(row.uploadStatus)}
                     </td>
                     <td style={{ padding: "0.875rem 1.25rem" }}>
-                      <Link
-                        href={`/dashboard/teacher/students/${row.profile.id}/upload`}
-                        style={{
-                          color: "#028090",
-                          fontSize: "0.8125rem",
-                          fontWeight: 600,
-                          textDecoration: "none",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Upload ↑
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <Link
+                          href={`/dashboard/teacher/students/${row.profile.id}/goals`}
+                          style={{
+                            color: "#028090",
+                            fontSize: "0.8125rem",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Goals →
+                        </Link>
+                        <Link
+                          href={`/dashboard/teacher/students/${row.profile.id}/iep`}
+                          style={{
+                            color: "#2563EB",
+                            fontSize: "0.8125rem",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          📋 IEP
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
