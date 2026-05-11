@@ -33,14 +33,7 @@ function LoginForm() {
     }
 
     if (data.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single();
-
-      const role = profile?.role ?? "student";
-      router.push(redirect ?? `/dashboard/${role}`);
+      router.push(redirect ?? "/dashboard");
       router.refresh();
     }
   }

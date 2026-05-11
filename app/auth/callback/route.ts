@@ -18,7 +18,7 @@ export async function GET(request: Request) {
         .single();
 
       if (profile?.role) {
-        return NextResponse.redirect(`${origin}/dashboard/${profile.role}`);
+        return NextResponse.redirect(`${origin}/dashboard`);
       }
 
       // Profile doesn't exist yet — redirect back to signup to complete it
