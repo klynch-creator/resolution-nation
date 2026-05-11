@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -42,36 +40,38 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth/login");
-        return;
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/auth/login");
+          return;
+        }
+
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (!profileData || profileData.role !== "teacher") {
+          router.push("/auth/login");
+          return;
+        }
+
+        setProfile(profileData);
+        await loadPodsFor(supabase, user.id);
+
+        const { count } = await supabase
+          .from("goals")
+          .select("*", { count: "exact", head: true })
+          .eq("teacher_id", user.id);
+        setTotalGoals(count ?? 0);
+      } finally {
+        setLoading(false);
       }
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (!profileData || profileData.role !== "teacher") {
-        router.push("/auth/login");
-        return;
-      }
-
-      setProfile(profileData);
-      await loadPodsFor(supabase, user.id);
-
-      const { count } = await supabase
-        .from("goals")
-        .select("*", { count: "exact", head: true })
-        .eq("teacher_id", user.id);
-      setTotalGoals(count ?? 0);
-
-      setLoading(false);
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

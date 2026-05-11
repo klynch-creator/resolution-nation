@@ -21,8 +21,19 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/dashboard`);
       }
 
-      // Profile doesn't exist yet — redirect back to signup to complete it
-      return NextResponse.redirect(`${origin}/auth/signup?step=profile`);
+      // Profile missing (trigger may not exist yet) — create it from metadata.
+      const meta = data.user.user_metadata ?? {};
+      const role = (meta.role as string) || "student";
+      await supabase.from("profiles").upsert(
+        {
+          id: data.user.id,
+          full_name: (meta.full_name as string) || "",
+          role,
+          grade: (meta.grade as string) || null,
+        },
+        { onConflict: "id", ignoreDuplicates: true }
+      );
+      return NextResponse.redirect(`${origin}/dashboard/${role}`);
     }
   }
 

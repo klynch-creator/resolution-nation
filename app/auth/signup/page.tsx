@@ -25,12 +25,15 @@ export default function SignupPage() {
 
     const supabase = createClient();
 
-    // 1. Create the auth user
+    // 1. Create the auth user — pass role/name as metadata so the DB trigger
+    //    can create the profile even when email confirmation is ON (no session).
+    const profileGrade = role === "student" ? grade || null : null;
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: { full_name: fullName, role, grade: profileGrade },
       },
     });
 
@@ -46,30 +49,25 @@ export default function SignupPage() {
       return;
     }
 
-    // 2. Create the profile
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: data.user.id,
-      email: data.user.email!,
-      full_name: fullName,
-      role,
-      grade: role === "student" ? grade || null : null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "id" });
-
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    // 3. If session is already active (email confirmation off), redirect now
+    // 2. If a session is active (email confirmation OFF), upsert the profile now.
+    //    The DB trigger may have already created it from metadata, so use upsert.
     if (data.session) {
-      router.push("/dashboard");
+      const { error: profileError } = await supabase.from("profiles").upsert(
+        { id: data.user.id, full_name: fullName, role, grade: profileGrade },
+        { onConflict: "id", ignoreDuplicates: true }
+      );
+      if (profileError) {
+        setError(profileError.message);
+        setLoading(false);
+        return;
+      }
+      router.push(`/dashboard/${role}`);
       router.refresh();
       return;
     }
 
-    // 4. Email confirmation required
+    // 3. Email confirmation required — the DB trigger creates the profile once
+    //    the user confirms and the callback fires.
     setSuccess(true);
     setLoading(false);
   }

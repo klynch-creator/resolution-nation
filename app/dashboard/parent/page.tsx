@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -150,6 +148,7 @@ export default function ParentDashboard() {
 
   useEffect(() => {
     async function load() {
+      try {
       setLoading(true);
       const supabase = createClient();
       const {
@@ -339,7 +338,9 @@ export default function ParentDashboard() {
         }
       }
 
-      setLoading(false);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();

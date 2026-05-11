@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -20,87 +18,89 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth/login");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (!profileData || profileData.role !== "student") {
-        router.push("/auth/login");
-        return;
-      }
-
-      setProfile(profileData);
-
-      // Get their classroom
-      const { data: memberData } = await supabase
-        .from("pod_members")
-        .select("pod_id, pods(*)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single();
-
-      if (memberData?.pods) {
-        setClassroom(memberData.pods as unknown as Pod);
-      }
-
-      // Get star balance
-      const { data: stars } = await supabase
-        .from("star_transactions")
-        .select("amount, type")
-        .eq("user_id", user.id);
-
-      if (stars) {
-        const balance = stars.reduce((sum, tx) => {
-          if (tx.type === "earned" || tx.type === "bonus" || tx.type === "gift_received") {
-            return sum + tx.amount;
-          }
-          if (tx.type === "gift_sent" || tx.type === "purchase") {
-            return sum - tx.amount;
-          }
-          return sum;
-        }, 0);
-        setStarBalance(balance);
-      }
-
-      // Get goals
-      const { data: goalsData } = await supabase
-        .from("goals")
-        .select("*")
-        .eq("student_id", user.id)
-        .order("created_at", { ascending: false });
-
-      const goalList = (goalsData as Goal[]) ?? [];
-      setGoals(goalList);
-
-      // Get approved roadmaps
-      if (goalList.length > 0) {
-        const { data: roadmapData } = await supabase
-          .from("learning_roadmaps")
-          .select("*")
-          .in("goal_id", goalList.map((g) => g.id))
-          .eq("status", "approved");
-
-        if (roadmapData) {
-          const map: Record<string, LearningRoadmap> = {};
-          (roadmapData as LearningRoadmap[]).forEach((r) => {
-            map[r.goal_id] = r;
-          });
-          setRoadmaps(map);
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/auth/login");
+          return;
         }
-      }
 
-      setLoading(false);
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (!profileData || profileData.role !== "student") {
+          router.push("/auth/login");
+          return;
+        }
+
+        setProfile(profileData);
+
+        // Get their classroom
+        const { data: memberData } = await supabase
+          .from("pod_members")
+          .select("pod_id, pods(*)")
+          .eq("user_id", user.id)
+          .limit(1)
+          .single();
+
+        if (memberData?.pods) {
+          setClassroom(memberData.pods as unknown as Pod);
+        }
+
+        // Get star balance
+        const { data: stars } = await supabase
+          .from("star_transactions")
+          .select("amount, type")
+          .eq("user_id", user.id);
+
+        if (stars) {
+          const balance = stars.reduce((sum, tx) => {
+            if (tx.type === "earned" || tx.type === "bonus" || tx.type === "gift_received") {
+              return sum + tx.amount;
+            }
+            if (tx.type === "gift_sent" || tx.type === "purchase") {
+              return sum - tx.amount;
+            }
+            return sum;
+          }, 0);
+          setStarBalance(balance);
+        }
+
+        // Get goals
+        const { data: goalsData } = await supabase
+          .from("goals")
+          .select("*")
+          .eq("student_id", user.id)
+          .order("created_at", { ascending: false });
+
+        const goalList = (goalsData as Goal[]) ?? [];
+        setGoals(goalList);
+
+        // Get approved roadmaps
+        if (goalList.length > 0) {
+          const { data: roadmapData } = await supabase
+            .from("learning_roadmaps")
+            .select("*")
+            .in("goal_id", goalList.map((g) => g.id))
+            .eq("status", "approved");
+
+          if (roadmapData) {
+            const map: Record<string, LearningRoadmap> = {};
+            (roadmapData as LearningRoadmap[]).forEach((r) => {
+              map[r.goal_id] = r;
+            });
+            setRoadmaps(map);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
