@@ -47,12 +47,14 @@ export default function SignupPage() {
     }
 
     // 2. Create the profile
-    const { error: profileError } = await supabase.from("profiles").insert({
+    const { error: profileError } = await supabase.from("profiles").upsert({
       id: data.user.id,
+      email: data.user.email!,
       full_name: fullName,
       role,
       grade: role === "student" ? grade || null : null,
-    });
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
 
     if (profileError) {
       setError(profileError.message);
@@ -62,7 +64,7 @@ export default function SignupPage() {
 
     // 3. If session is already active (email confirmation off), redirect now
     if (data.session) {
-      router.push(`/dashboard/${role}`);
+      router.push("/dashboard");
       router.refresh();
       return;
     }

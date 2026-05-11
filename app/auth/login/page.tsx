@@ -40,7 +40,7 @@ function LoginForm() {
         .single();
 
       const role = profile?.role ?? "student";
-      router.push(redirect ?? `/dashboard/${role}`);
+      router.push(redirect ?? "/dashboard");
       router.refresh();
     }
   }
