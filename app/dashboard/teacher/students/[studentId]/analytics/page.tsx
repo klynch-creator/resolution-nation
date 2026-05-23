@@ -244,7 +244,7 @@ export default function StudentAnalyticsPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth/login"); return; }
+      if (!user) { router.push("/dashboard"); return; }
 
       const { data: teacherProfile } = await supabase
         .from("profiles")
@@ -252,7 +252,7 @@ export default function StudentAnalyticsPage() {
         .eq("id", user.id)
         .single();
       if (!teacherProfile || teacherProfile.role !== "teacher") {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 

@@ -86,17 +86,17 @@ export default function WorkoutPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-      if (!profileData || profileData.role !== "student") {
-        router.push("/auth/login");
+      // Use /api/me (admin client) to bypass the RLS recursion bug on profiles.
+      const meRes = await fetch("/api/me");
+      const meJson = meRes.ok ? await meRes.json() : { profile: null };
+      const profileData = meJson.profile;
+
+      if (profileData && profileData.role !== "student") {
+        window.location.href = "/dashboard";
         return;
       }
       setProfile(profileData);
@@ -287,7 +287,7 @@ export default function WorkoutPage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      router.push("/auth/login");
+      router.push("/dashboard");
       return;
     }
 

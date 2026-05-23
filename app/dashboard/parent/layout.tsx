@@ -48,18 +48,16 @@ export default function ParentLayout({
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      // Use /api/me (admin client) to bypass the RLS recursion bug on profiles.
+      const meRes = await fetch("/api/me");
+      const p = meRes.ok ? (await meRes.json()).profile : null;
 
       if (!p || p.role !== "parent") {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 

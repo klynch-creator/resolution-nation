@@ -319,7 +319,7 @@ export default function TeacherAnalyticsPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
@@ -329,7 +329,7 @@ export default function TeacherAnalyticsPage() {
         .eq("id", user.id)
         .single();
       if (!profile || profile.role !== "teacher") {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
       setTeacherName(profile.full_name);

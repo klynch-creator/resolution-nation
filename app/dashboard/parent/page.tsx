@@ -185,10 +185,18 @@ export default function ParentDashboard() {
       // Load star balance
       const { data: transactions } = await supabase
         .from("star_transactions")
-        .select("amount")
+        .select("amount, type")
         .eq("user_id", childId);
       const balance = (transactions ?? []).reduce(
-        (sum: number, t: { amount: number }) => sum + t.amount,
+        (sum: number, t: { amount: number; type: string }) => {
+          if (t.type === "earned" || t.type === "bonus" || t.type === "gift_received") {
+            return sum + t.amount;
+          }
+          if (t.type === "gift_sent" || t.type === "purchase") {
+            return sum - t.amount;
+          }
+          return sum;
+        },
         0
       );
       setStarBalance(balance);

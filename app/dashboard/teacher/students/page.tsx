@@ -40,7 +40,7 @@ function StudentsContent() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
@@ -51,7 +51,7 @@ function StudentsContent() {
         .single();
 
       if (!profile || profile.role !== "teacher") {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
@@ -454,86 +454,114 @@ function StudentsContent() {
             </p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "1.5px solid #E2E8F0" }}>
-                  {[
-                    { label: "Student", width: "35%" },
-                    { label: "Grade", width: "15%" },
-                    { label: "Classroom", width: "25%" },
-                    { label: "Report Card", width: "15%" },
-                    { label: "", width: "10%" },
-                  ].map((col) => (
-                    <th
-                      key={col.label}
-                      style={{
-                        width: col.width,
-                        padding: "0.875rem 1.25rem",
-                        textAlign: "left",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        color: "#64748B",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((row, i) => (
-                  <tr
-                    key={row.profile.id}
+          <div className="flex flex-col gap-3">
+            {students.map((row) => (
+              <div
+                key={row.profile.id}
+                className="card"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "1rem",
+                  padding: "1rem 1.25rem",
+                }}
+              >
+                {/* Student info */}
+                <div style={{ minWidth: "180px" }}>
+                  <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/goals`}
                     style={{
-                      borderBottom:
-                        i < students.length - 1 ? "1px solid #F1F5F9" : "none",
+                      fontWeight: 700,
+                      color: "#0C2340",
+                      fontSize: "1rem",
+                      textDecoration: "none",
                     }}
                   >
-                    <td style={{ padding: "0.875rem 1.25rem" }}>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          color: "#0C2340",
-                          fontSize: "0.9375rem",
-                        }}
-                      >
-                        {row.profile.full_name}
-                      </div>
-                    </td>
-                    <td style={{ padding: "0.875rem 1.25rem" }}>
-                      <span style={{ color: "#64748B", fontSize: "0.875rem" }}>
-                        {row.profile.grade ?? "—"}
+                    {row.profile.full_name}
+                  </Link>
+                  <div className="flex items-center gap-2" style={{ marginTop: "0.25rem" }}>
+                    {row.profile.grade && (
+                      <span style={{ fontSize: "0.8125rem", color: "#64748B" }}>
+                        Grade {row.profile.grade}
                       </span>
-                    </td>
-                    <td style={{ padding: "0.875rem 1.25rem" }}>
-                      <span style={{ color: "#64748B", fontSize: "0.875rem" }}>
-                        {row.classroomName}
-                      </span>
-                    </td>
-                    <td style={{ padding: "0.875rem 1.25rem" }}>
+                    )}
+                    <span style={{ fontSize: "0.8125rem", color: "#94A3B8" }}>
+                      {row.classroomName}
+                    </span>
+                    <span style={{ fontSize: "0.8125rem" }}>
                       {uploadBadge(row.uploadStatus)}
-                    </td>
-                    <td style={{ padding: "0.875rem 1.25rem" }}>
-                      <Link
-                        href={`/dashboard/teacher/students/${row.profile.id}/upload`}
-                        style={{
-                          color: "#028090",
-                          fontSize: "0.8125rem",
-                          fontWeight: 600,
-                          textDecoration: "none",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Upload ↑
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action links */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/goals`}
+                    style={{
+                      background: "#028090",
+                      color: "white",
+                      borderRadius: "8px",
+                      padding: "0.4375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    🎯 Goals
+                  </Link>
+                  <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/iep`}
+                    style={{
+                      background: "#7C3AED",
+                      color: "white",
+                      borderRadius: "8px",
+                      padding: "0.4375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    📋 IEP
+                  </Link>
+                  <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/analytics`}
+                    style={{
+                      background: "#D97706",
+                      color: "white",
+                      borderRadius: "8px",
+                      padding: "0.4375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    📊 Analytics
+                  </Link>
+                  <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/upload`}
+                    style={{
+                      background: "white",
+                      color: "#028090",
+                      border: "1.5px solid #028090",
+                      borderRadius: "8px",
+                      padding: "0.375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    📄 Upload
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>

@@ -38,21 +38,25 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) =>
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    );
+    return redirectResponse;
   }
 
-  // Already logged in users hitting auth pages → redirect to their dashboard
+  // Already logged in users hitting auth pages → send to the role router.
+  // Don't try to read the profile here — the client-side RLS policies have a
+  // recursion bug and querying profiles in the proxy causes 500s. Let the
+  // /dashboard server component (which uses the admin client) handle routing.
   if (user && (pathname === "/auth/login" || pathname === "/auth/signup")) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const role = profile?.role ?? "student";
     const url = request.nextUrl.clone();
-    url.pathname = `/dashboard/${role}`;
-    return NextResponse.redirect(url);
+    url.pathname = "/dashboard";
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) =>
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    );
+    return redirectResponse;
   }
 
   return supabaseResponse;

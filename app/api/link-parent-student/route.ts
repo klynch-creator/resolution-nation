@@ -67,8 +67,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get child's profile
-    const { data: childProfile } = await supabase
+    // Get child's profile — must use adminClient because parent has no RLS access yet
+    const { data: childProfile } = await adminClient
       .from("profiles")
       .select("id, full_name, role, grade")
       .eq("id", childAuthUser.id)
@@ -88,9 +88,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find the teacher from the child's class pod
+    // Find the teacher from the child's class pod — must use adminClient (parent has no pod_members access)
     let teacherId: string | null = null;
-    const { data: childMembership } = await supabase
+    const { data: childMembership } = await adminClient
       .from("pod_members")
       .select("pod_id, pods(created_by, type)")
       .eq("user_id", childProfile.id)

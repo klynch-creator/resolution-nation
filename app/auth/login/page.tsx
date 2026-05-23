@@ -33,15 +33,15 @@ function LoginForm() {
     }
 
     if (data.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single();
-
-      const role = profile?.role ?? "student";
-      router.push(redirect ?? "/dashboard");
-      router.refresh();
+      // Hard-navigate to /dashboard and let the server-side role router
+      // (app/dashboard/page.tsx) redirect to the correct role dashboard.
+      // We don't read profiles here because the client-side RLS policies have
+      // a recursion bug that returns 500s for this query.
+      const dest =
+        redirect && redirect.startsWith("/dashboard/")
+          ? redirect
+          : "/dashboard";
+      window.location.href = dest;
     }
   }
 

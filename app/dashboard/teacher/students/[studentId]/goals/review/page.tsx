@@ -241,7 +241,7 @@ function GoalsReviewContent() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
@@ -252,7 +252,7 @@ function GoalsReviewContent() {
         .single();
 
       if (!teacherProfile || teacherProfile.role !== "teacher") {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 

@@ -185,7 +185,7 @@ export default function UploadPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
@@ -196,7 +196,7 @@ export default function UploadPage() {
         .single();
 
       if (!teacherProfile || teacherProfile.role !== "teacher") {
-        router.push("/auth/login");
+        router.push("/dashboard");
         return;
       }
 
