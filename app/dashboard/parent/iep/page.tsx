@@ -121,9 +121,10 @@ export default function ParentIepPage() {
   if (loading) {
     return (
       <main
-        className="flex items-center justify-center"
+        className="flex flex-col gap-3 items-center justify-center"
         style={{ minHeight: "calc(100vh - 112px)" }}
       >
+        <div className="spinner" aria-hidden="true" />
         <div style={{ color: "#028090", fontSize: "1.125rem" }}>Loading…</div>
       </main>
     );

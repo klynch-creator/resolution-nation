@@ -31,6 +31,7 @@ export default function TeacherDashboard() {
   const [pods, setPods] = useState<PodWithCount[]>([]);
   const [totalGoals, setTotalGoals] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [newClassName, setNewClassName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -52,6 +53,9 @@ export default function TeacherDashboard() {
 
         // Use /api/me (admin client) to bypass the RLS recursion bug on profiles.
         const meRes = await fetch("/api/me");
+        if (!meRes.ok) {
+          setLoadError("We couldn't load your dashboard data. Please try again.");
+        }
         const meJson = meRes.ok ? await meRes.json() : { profile: null };
         const profileData = meJson.profile;
 
@@ -153,11 +157,9 @@ export default function TeacherDashboard() {
 
   if (loading) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "#F7F9FC" }}
-      >
-        <div style={{ color: "#028090", fontSize: "1.125rem" }}>Loading…</div>
+      <div className="loading-screen">
+        <div className="spinner" aria-hidden="true" />
+        <div>Loading your dashboard…</div>
       </div>
     );
   }
@@ -237,6 +239,26 @@ export default function TeacherDashboard() {
       </nav>
 
       <main style={{ maxWidth: "1000px", margin: "0 auto", padding: "2rem 1.5rem" }}>
+        {loadError && (
+          <div className="error-banner" role="alert">
+            {loadError}{" "}
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#DC2626",
+                fontWeight: 700,
+                cursor: "pointer",
+                textDecoration: "underline",
+                padding: 0,
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Welcome */}
         <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
           <div>

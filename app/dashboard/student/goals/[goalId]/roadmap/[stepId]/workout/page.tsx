@@ -319,12 +319,21 @@ export default function WorkoutPage() {
         .eq("id", nextStepId);
     }
 
-    // 4. Credit stars
-    await supabase.from("star_transactions").insert({
-      user_id: user.id,
-      amount: starsEarned,
-      type: "earned",
+    // 4. Credit stars via the award_stars RPC (SECURITY DEFINER).
+    // Direct inserts into star_transactions are blocked by RLS; the RPC
+    // validates that the step is completed, belongs to this student, the
+    // amount doesn't exceed the step's star_reward, and the step hasn't
+    // already been rewarded.
+    const { error: awardError } = await supabase.rpc("award_stars", {
+      p_user_id: user.id,
+      p_amount: starsEarned,
+      p_type: "earned",
+      p_item_id: null,
+      p_step_id: stepId,
     });
+    if (awardError) {
+      console.error("award_stars failed:", awardError.message);
+    }
 
     setGamePhase("saved");
     setTimeout(() => {

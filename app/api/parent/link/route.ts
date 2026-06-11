@@ -1,16 +1,46 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
+/**
+ * Parent ↔ Child link by invite code.
+ *
+ * Replaces the prior implementation, which enumerated all auth
+ * users via auth.admin.listUsers() to find a child by email.
+ * That approach leaked the existence of every account in the
+ * project and did not scale.
+ *
+ * New flow:
+ *   1. The student calls POST /api/parent/link/code to mint a
+ *      6-character one-time invite code (valid 7 days).
+ *   2. The student shares that code with their parent out of band.
+ *   3. The parent calls POST /api/parent/link with the code.
+ *   4. The DB function redeem_parent_link_code (SECURITY DEFINER)
+ *      validates the code and adds the parent as a viewer in the
+ *      child's family pod.
+ *
+ * No user enumeration is possible: the only identifier exchanged
+ * is the short-lived code, and it is single-use.
+ */
 export async function POST(request: Request) {
   try {
-    const { childEmail } = await request.json();
+    // Brute-force protection: 5 redemption attempts per minute per IP.
+    const rl = checkRateLimit(request, {
+      routeKey: "parent-link-redeem",
+      limit: 5,
+      windowSec: 60,
+    });
+    if (!rl.ok) return rateLimitResponse(rl);
 
-    if (!childEmail) {
-      return NextResponse.json({ error: "Child email is required." }, { status: 400 });
+    const { code } = await request.json();
+
+    if (!code || typeof code !== "string" || code.trim().length !== 6) {
+      return NextResponse.json(
+        { error: "Enter the 6-character code your child shared with you." },
+        { status: 400 }
+      );
     }
 
-    // Get the current (parent) user from the request cookies
     const supabase = await createClient();
     const {
       data: { user: parentUser },
@@ -20,123 +50,50 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
 
-    // Verify the current user is a parent
-    const { data: parentProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", parentUser.id)
-      .single();
-
-    if (parentProfile?.role !== "parent") {
-      return NextResponse.json({ error: "Only parents can link children." }, { status: 403 });
-    }
-
-    // Use the admin client to look up the child's user ID by email
-    const adminClient = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    const { data: podId, error } = await supabase.rpc(
+      "redeem_parent_link_code",
+      { p_code: code.trim().toUpperCase() }
     );
 
-    const { data: authUsers, error: authError } =
-      await adminClient.auth.admin.listUsers();
-
-    if (authError) {
-      return NextResponse.json({ error: "Could not look up user." }, { status: 500 });
-    }
-
-    const childAuthUser = authUsers.users.find(
-      (u) => u.email?.toLowerCase() === childEmail.toLowerCase()
-    );
-
-    if (!childAuthUser) {
+    if (error) {
+      // Surface user-meaningful errors raised by the RPC.
+      const friendly = mapRpcError(error.message);
       return NextResponse.json(
-        { error: "No account found with that email. Make sure your child has signed up first." },
-        { status: 404 }
+        { error: friendly.message },
+        { status: friendly.status }
       );
     }
 
-    // Get the child's profile and verify they're a student
-    const { data: childProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", childAuthUser.id)
-      .single();
-
-    if (!childProfile) {
-      return NextResponse.json(
-        { error: "No profile found for that email." },
-        { status: 404 }
-      );
-    }
-
-    if (childProfile.role !== "student") {
-      return NextResponse.json(
-        { error: "That account is not a student account." },
-        { status: 400 }
-      );
-    }
-
-    // Find the child's classroom pod
-    const { data: childMembership } = await supabase
-      .from("pod_members")
-      .select("pod_id")
-      .eq("user_id", childProfile.id)
-      .eq("role", "member")
-      .limit(1)
-      .single();
-
-    if (!childMembership) {
-      // Child isn't in a classroom yet — still link them via a special "family" pod
-      const { data: familyPod, error: podError } = await supabase
-        .from("pods")
-        .insert({
-          name: `${childProfile.full_name}'s Family`,
-          type: "family",
-          created_by: parentUser.id,
-        })
-        .select()
-        .single();
-
-      if (podError) {
-        return NextResponse.json({ error: podError.message }, { status: 500 });
-      }
-
-      // Add child as member
-      await supabase.from("pod_members").insert({
-        pod_id: familyPod.id,
-        user_id: childProfile.id,
-        role: "member",
-      });
-
-      // Add parent as viewer
-      await supabase.from("pod_members").insert({
-        pod_id: familyPod.id,
-        user_id: parentUser.id,
-        role: "viewer",
-      });
-    } else {
-      // Check if parent is already a viewer in this pod
-      const { data: existingViewership } = await supabase
-        .from("pod_members")
-        .select("id")
-        .eq("pod_id", childMembership.pod_id)
-        .eq("user_id", parentUser.id)
-        .single();
-
-      if (!existingViewership) {
-        await supabase.from("pod_members").insert({
-          pod_id: childMembership.pod_id,
-          user_id: parentUser.id,
-          role: "viewer",
-        });
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      childName: childProfile.full_name,
-    });
+    return NextResponse.json({ success: true, podId });
   } catch {
-    return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
+    return NextResponse.json(
+      { error: "An unexpected error occurred." },
+      { status: 500 }
+    );
   }
+}
+
+function mapRpcError(raw: string): { message: string; status: number } {
+  if (raw.includes("invalid_code")) {
+    return { message: "That code is not recognized.", status: 404 };
+  }
+  if (raw.includes("code_already_used")) {
+    return {
+      message: "That code has already been used. Ask your child for a new one.",
+      status: 409,
+    };
+  }
+  if (raw.includes("code_expired")) {
+    return {
+      message: "That code has expired. Ask your child to generate a new one.",
+      status: 410,
+    };
+  }
+  if (raw.includes("only_parents_can_redeem")) {
+    return {
+      message: "Only parent accounts can link to a child.",
+      status: 403,
+    };
+  }
+  return { message: "Could not link account.", status: 500 };
 }

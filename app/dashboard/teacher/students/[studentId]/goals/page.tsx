@@ -174,6 +174,7 @@ export default function TeacherStudentGoalsPage() {
 
   const [roadmaps, setRoadmaps] = useState<Record<string, LearningRoadmap>>({});
   const [generatingGoalId, setGeneratingGoalId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [editForm, setEditForm] = useState<GoalFormState>(defaultForm);
@@ -265,6 +266,7 @@ export default function TeacherStudentGoalsPage() {
 
   async function handleCreateRoadmap(goal: Goal) {
     setGeneratingGoalId(goal.id);
+    setActionError(null);
     try {
       const res = await fetch("/api/generate-roadmap", {
         method: "POST",
@@ -277,11 +279,11 @@ export default function TeacherStudentGoalsPage() {
         );
       } else {
         const { error } = await res.json();
-        alert(error ?? "Failed to generate roadmap. Please try again.");
+        setActionError(error ?? "Failed to generate roadmap. Please try again.");
         setGeneratingGoalId(null);
       }
     } catch {
-      alert("Failed to generate roadmap. Please try again.");
+      setActionError("Failed to generate roadmap. Please try again.");
       setGeneratingGoalId(null);
     }
   }
@@ -389,9 +391,10 @@ export default function TeacherStudentGoalsPage() {
   if (loading) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen flex flex-col gap-3 items-center justify-center"
         style={{ background: "#F7F9FC" }}
       >
+        <div className="spinner" aria-hidden="true" />
         <div style={{ color: "#028090", fontSize: "1.125rem" }}>Loading…</div>
       </div>
     );
@@ -474,6 +477,12 @@ export default function TeacherStudentGoalsPage() {
       <main
         style={{ maxWidth: "1000px", margin: "0 auto", padding: "2rem 1.5rem" }}
       >
+        {actionError && (
+          <div className="error-banner" role="alert">
+            {actionError}
+          </div>
+        )}
+
         {/* Student header */}
         <div className="flex items-center gap-4 mb-8 flex-wrap justify-between">
           <div className="flex items-center gap-4">

@@ -77,7 +77,8 @@ export default function StudentRoadmapPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#F7F9FC" }}>
+      <div className="min-h-screen flex flex-col gap-3 items-center justify-center" style={{ background: "#F7F9FC" }}>
+        <div className="spinner" aria-hidden="true" />
         <div style={{ color: "#028090", fontSize: "1.125rem" }}>Loading your roadmap…</div>
       </div>
     );

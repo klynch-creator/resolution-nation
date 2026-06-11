@@ -29,42 +29,21 @@ export default function JoinPage() {
       return;
     }
 
-    // Look up the pod by invite code
-    const { data: pod, error: podError } = await supabase
-      .from("pods")
-      .select("*")
-      .eq("invite_code", inviteCode.trim().toLowerCase())
-      .single();
-
-    if (podError || !pod) {
-      setError("That invite code doesn't match any classroom. Double-check with your teacher.");
-      setLoading(false);
-      return;
-    }
-
-    // Check if already a member
-    const { data: existing } = await supabase
-      .from("pod_members")
-      .select("id")
-      .eq("pod_id", pod.id)
-      .eq("user_id", user.id)
-      .single();
-
-    if (existing) {
-      // Already joined — just redirect
-      router.push("/dashboard/student");
-      return;
-    }
-
-    // Join the pod
-    const { error: joinError } = await supabase.from("pod_members").insert({
-      pod_id: pod.id,
-      user_id: user.id,
-      role: "member",
+    // Validate the code and join atomically via SECURITY DEFINER RPC.
+    // (Non-members can't SELECT pods under RLS, so the lookup + insert
+    // happens server-side in the database function.)
+    const { error: joinError } = await supabase.rpc("join_pod_by_invite_code", {
+      p_code: inviteCode.trim().toLowerCase(),
     });
 
     if (joinError) {
-      setError(joinError.message);
+      if (joinError.message.includes("invalid_invite_code")) {
+        setError("That invite code doesn't match any classroom. Double-check with your teacher.");
+      } else if (joinError.message.includes("only_students_can_join")) {
+        setError("Only student accounts can join a classroom with an invite code.");
+      } else {
+        setError("Something went wrong joining the classroom. Please try again.");
+      }
       setLoading(false);
       return;
     }

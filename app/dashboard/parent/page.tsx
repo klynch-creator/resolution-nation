@@ -10,10 +10,10 @@ import type {
   RoadmapStep,
 } from "@/types";
 
-// ─── Inline link-request form ─────────────────────────────────────────────────
+// ─── Inline link-request form (invite code) ───────────────────────────────────
 
 function LinkRequestForm({ onSuccess }: { onSuccess: () => void }) {
-  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,10 +22,10 @@ function LinkRequestForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true);
     setError(null);
 
-    const res = await fetch("/api/link-parent-student", {
+    const res = await fetch("/api/parent/link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ childEmail: email.trim().toLowerCase() }),
+      body: JSON.stringify({ code: code.trim().toUpperCase() }),
     });
 
     const data = await res.json();
@@ -64,44 +64,41 @@ function LinkRequestForm({ onSuccess }: { onSuccess: () => void }) {
           marginBottom: "1.5rem",
         }}
       >
-        Enter your child&apos;s email address. Their teacher will receive a
-        request and approve the connection.
+        Ask your child to open <strong>Invite a Parent</strong> in their app and
+        share their 6-character invite code with you. Enter it below.
       </p>
 
       {error && (
-        <div
-          style={{
-            background: "#FEF2F2",
-            border: "1px solid #FCA5A5",
-            borderRadius: "8px",
-            padding: "0.75rem 1rem",
-            color: "#DC2626",
-            fontSize: "0.875rem",
-            marginBottom: "1rem",
-            textAlign: "left",
-          }}
-        >
+        <div className="error-banner" style={{ textAlign: "left" }} role="alert">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="child@school.com"
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="ABC123"
           required
           autoFocus
-          style={{ textAlign: "left" }}
+          maxLength={6}
+          aria-label="Invite code"
+          style={{
+            textAlign: "center",
+            letterSpacing: "0.35em",
+            fontWeight: 700,
+            fontSize: "1.25rem",
+            textTransform: "uppercase",
+          }}
         />
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || code.trim().length !== 6}
           className="btn-primary"
           style={{ height: "2.75rem" }}
         >
-          {loading ? "Sending request…" : "Send Link Request"}
+          {loading ? "Linking…" : "Link Account"}
         </button>
       </form>
 
@@ -113,8 +110,9 @@ function LinkRequestForm({ onSuccess }: { onSuccess: () => void }) {
           lineHeight: 1.5,
         }}
       >
-        Your child must already have a Resolution Nation account. The request
-        will be reviewed by their teacher for COPPA compliance.
+        Codes expire after 7 days and can only be used once. After you link,
+        your child&apos;s teacher reviews and approves the connection (COPPA
+        compliance).
       </p>
     </div>
   );
@@ -145,11 +143,13 @@ export default function ParentDashboard() {
   const [goalProgress, setGoalProgress] = useState<GoalProgress[]>([]);
   const [recentActivity, setRecentActivity] = useState<WorkoutActivity[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
       setLoading(true);
+      setLoadError(null);
       const supabase = createClient();
       const {
         data: { user },
@@ -157,12 +157,16 @@ export default function ParentDashboard() {
       if (!user) return;
 
       // Get most recent parent_student_link for this parent
-      const { data: links } = await supabase
+      const { data: links, error: linksError } = await supabase
         .from("parent_student_links")
         .select("*")
         .eq("parent_id", user.id)
         .order("created_at", { ascending: false })
         .limit(1);
+
+      if (linksError) {
+        setLoadError("We couldn't load your dashboard data. Please try again.");
+      }
 
       const currentLink = links?.[0] ?? null;
       setLink(currentLink as ParentStudentLink | null);
@@ -364,10 +368,35 @@ export default function ParentDashboard() {
   if (loading) {
     return (
       <main
-        className="flex items-center justify-center"
-        style={{ minHeight: "calc(100vh - 112px)" }}
+        className="flex flex-col items-center justify-center gap-4"
+        style={{ minHeight: "calc(100vh - 112px)", color: "#028090" }}
       >
-        <div style={{ color: "#028090", fontSize: "1.125rem" }}>Loading…</div>
+        <div className="spinner" aria-hidden="true" />
+        <div style={{ fontSize: "1.125rem" }}>Loading…</div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main style={{ maxWidth: "900px", margin: "0 auto", padding: "3rem 1.25rem" }}>
+        <div className="error-banner" role="alert">
+          {loadError}{" "}
+          <button
+            onClick={() => setRefreshKey((k) => k + 1)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#DC2626",
+              fontWeight: 700,
+              cursor: "pointer",
+              textDecoration: "underline",
+              padding: 0,
+            }}
+          >
+            Retry
+          </button>
+        </div>
       </main>
     );
   }

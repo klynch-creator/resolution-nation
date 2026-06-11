@@ -1,6 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+/**
+ * Purchase a star-store item.
+ *
+ * Delegates to the spend_stars(p_item_id) SECURITY DEFINER RPC, which
+ * atomically: validates the item, computes the caller's balance from the
+ * transaction ledger, inserts the purchase transaction, and adds the item
+ * to the caller's inventory. Direct client inserts into star_transactions
+ * and user_inventory are blocked by RLS (migration 016).
+ */
 export async function POST(request: Request) {
   try {
     const { item_id } = await request.json();
@@ -29,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only students can purchase items." }, { status: 403 });
     }
 
-    // Fetch item
+    // Fetch item (also returned to the client on success)
     const { data: item } = await supabase
       .from("star_store_items")
       .select("*")
@@ -52,45 +61,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "You already own this item." }, { status: 409 });
     }
 
-    // Calculate star balance
-    const { data: stars } = await supabase
-      .from("star_transactions")
-      .select("amount, type")
-      .eq("user_id", user.id);
-
-    const balance = (stars ?? []).reduce((sum, tx) => {
-      if (["earned", "bonus", "gift_received"].includes(tx.type)) return sum + tx.amount;
-      if (["gift_sent", "purchase"].includes(tx.type)) return sum - tx.amount;
-      return sum;
-    }, 0);
-
-    if (balance < item.star_cost) {
-      return NextResponse.json(
-        { error: `Not enough stars. You need ${item.star_cost} but have ${balance}.` },
-        { status: 402 }
-      );
-    }
-
-    // Deduct stars
-    const { error: txError } = await supabase.from("star_transactions").insert({
-      user_id: user.id,
-      amount: item.star_cost,
-      type: "purchase",
-      item_id: item.id,
+    // Atomic balance check + purchase + inventory insert.
+    const { error: spendError } = await supabase.rpc("spend_stars", {
+      p_item_id: item_id,
     });
 
-    if (txError) {
-      return NextResponse.json({ error: "Failed to record transaction." }, { status: 500 });
-    }
-
-    // Add to inventory
-    const { error: invError } = await supabase.from("user_inventory").insert({
-      user_id: user.id,
-      item_id: item.id,
-    });
-
-    if (invError) {
-      return NextResponse.json({ error: "Failed to add item to inventory." }, { status: 500 });
+    if (spendError) {
+      if (spendError.message.includes("insufficient_balance")) {
+        return NextResponse.json(
+          { error: `Not enough stars to buy this item (costs ${item.star_cost}).` },
+          { status: 402 }
+        );
+      }
+      if (spendError.message.includes("item_not_found")) {
+        return NextResponse.json({ error: "Item not found." }, { status: 404 });
+      }
+      console.error("spend_stars error:", spendError.message);
+      return NextResponse.json({ error: "Purchase failed. Please try again." }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, item });

@@ -62,6 +62,7 @@ export default function TeacherRoadmapPage() {
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
 
   useEffect(() => {
@@ -141,6 +142,7 @@ export default function TeacherRoadmapPage() {
   async function handleRegenerate() {
     if (!goal) return;
     setRegenerating(true);
+    setActionError(null);
     try {
       const res = await fetch("/api/generate-roadmap", {
         method: "POST",
@@ -152,18 +154,19 @@ export default function TeacherRoadmapPage() {
         await loadRoadmap(supabase);
       } else {
         const { error } = await res.json();
-        alert(error ?? "Failed to regenerate. Please try again.");
+        setActionError(error ?? "Failed to regenerate. Please try again.");
       }
     } catch {
-      alert("Failed to regenerate. Please try again.");
+      setActionError("Failed to regenerate. Please try again.");
     }
     setRegenerating(false);
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#F7F9FC" }}>
-        <div style={{ color: "#028090", fontSize: "1.125rem" }}>Loading…</div>
+      <div className="loading-screen">
+        <div className="spinner" aria-hidden="true" />
+        <div>Loading…</div>
       </div>
     );
   }
@@ -260,6 +263,12 @@ export default function TeacherRoadmapPage() {
             </span>
           </div>
         </div>
+
+        {actionError && (
+          <div className="error-banner" role="alert">
+            {actionError}
+          </div>
+        )}
 
         {/* Loading / no roadmap state */}
         {regenerating && (

@@ -15,6 +15,7 @@ export default function StudentDashboard() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [roadmaps, setRoadmaps] = useState<Record<string, LearningRoadmap>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -30,6 +31,9 @@ export default function StudentDashboard() {
 
         // Use /api/me (admin client) to bypass the RLS recursion bug on profiles.
         const meRes = await fetch("/api/me");
+        if (!meRes.ok) {
+          setLoadError("We couldn't load your profile. Please try again.");
+        }
         const meJson = meRes.ok ? await meRes.json() : { profile: null };
         const profileData = meJson.profile;
 
@@ -41,12 +45,16 @@ export default function StudentDashboard() {
         setProfile(profileData);
 
         // Get their classroom
-        const { data: memberData } = await supabase
+        const { data: memberData, error: memberError } = await supabase
           .from("pod_members")
           .select("pod_id, pods(*)")
           .eq("user_id", user.id)
           .limit(1)
-          .single();
+          .maybeSingle();
+
+        if (memberError) {
+          setLoadError("Some of your data couldn't be loaded. Pull to refresh or try again shortly.");
+        }
 
         if (memberData?.pods) {
           setClassroom(memberData.pods as unknown as Pod);
@@ -112,13 +120,9 @@ export default function StudentDashboard() {
 
   if (loading) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "#F7F9FC" }}
-      >
-        <div style={{ color: "#028090", fontSize: "1.25rem" }}>
-          Loading your dashboard…
-        </div>
+      <div className="loading-screen">
+        <div className="spinner" aria-hidden="true" />
+        <div>Loading your dashboard…</div>
       </div>
     );
   }
@@ -224,6 +228,26 @@ export default function StudentDashboard() {
       </nav>
 
       <main style={{ maxWidth: "760px", margin: "0 auto", padding: "2rem 1.25rem" }}>
+        {loadError && (
+          <div className="error-banner" role="alert">
+            {loadError}{" "}
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#DC2626",
+                fontWeight: 700,
+                cursor: "pointer",
+                textDecoration: "underline",
+                padding: 0,
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Welcome banner */}
         <div
           style={{
@@ -396,12 +420,11 @@ export default function StudentDashboard() {
             style={{ textDecoration: "none" }}
           >
             <div
-              className="card"
+              className="card card-hover"
               style={{
                 background: "linear-gradient(135deg, #D97706 0%, #F59E0B 100%)",
                 padding: "1.25rem",
                 cursor: "pointer",
-                transition: "transform 0.15s, box-shadow 0.15s",
               }}
             >
               <div style={{ fontSize: "2rem", marginBottom: "0.375rem" }}>⭐</div>
@@ -426,7 +449,7 @@ export default function StudentDashboard() {
             style={{ textDecoration: "none" }}
           >
             <div
-              className="card"
+              className="card card-hover"
               style={{
                 background: "linear-gradient(135deg, #7C3AED 0%, #9F67FA 100%)",
                 padding: "1.25rem",

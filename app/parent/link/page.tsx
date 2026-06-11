@@ -9,33 +9,30 @@ import Link from "next/link";
 export default function ParentLinkPage() {
   const router = useRouter();
 
-  const [childEmail, setChildEmail] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [childName, setChildName] = useState("");
 
   async function handleLink(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Find student by email via a server-side lookup
     const response = await fetch("/api/parent/link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ childEmail: childEmail.trim().toLowerCase() }),
+      body: JSON.stringify({ code: code.trim().toUpperCase() }),
     });
 
     const result = await response.json();
 
     if (!response.ok) {
-      setError(result.error ?? "Could not find a student with that email.");
+      setError(result.error ?? "Could not link account.");
       setLoading(false);
       return;
     }
 
-    setChildName(result.childName);
     setSuccess(true);
     setLoading(false);
   }
@@ -60,8 +57,8 @@ export default function ParentLinkPage() {
             Linked Successfully!
           </h2>
           <p style={{ color: "#475569", lineHeight: 1.6, marginBottom: "1.5rem" }}>
-            You&apos;re now connected to <strong>{childName}</strong>&apos;s account. You can
-            see their goals and progress from your dashboard.
+            You&apos;re now connected to your child&apos;s account. You can see their
+            goals and progress from your dashboard.
           </p>
           <button
             onClick={() => router.push("/dashboard/parent")}
@@ -80,7 +77,7 @@ export default function ParentLinkPage() {
       className="min-h-screen flex items-center justify-center px-4"
       style={{ background: "#F7F9FC" }}
     >
-      <div style={{ width: "100%", maxWidth: "420px" }}>
+      <div style={{ width: "100%", maxWidth: "440px" }}>
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
@@ -113,12 +110,13 @@ export default function ParentLinkPage() {
               Link Your Child
             </h1>
             <p style={{ color: "#64748B", fontSize: "1rem", lineHeight: 1.6 }}>
-              Enter your child&apos;s email address to connect their account to yours.
+              Enter the 6-character code your child shared with you.
             </p>
           </div>
 
           {error && (
             <div
+              role="alert"
               style={{
                 background: "#FEF2F2",
                 border: "1px solid #FCA5A5",
@@ -136,6 +134,7 @@ export default function ParentLinkPage() {
           <form onSubmit={handleLink} className="flex flex-col gap-4">
             <div>
               <label
+                htmlFor="parent-link-code"
                 style={{
                   display: "block",
                   fontSize: "1rem",
@@ -144,57 +143,69 @@ export default function ParentLinkPage() {
                   marginBottom: "0.5rem",
                 }}
               >
-                Child&apos;s Email Address
+                Invite Code
               </label>
               <input
-                type="email"
-                value={childEmail}
-                onChange={(e) => setChildEmail(e.target.value)}
-                placeholder="child@example.com"
+                id="parent-link-code"
+                type="text"
+                value={code}
+                onChange={(e) =>
+                  setCode(
+                    e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, "")
+                      .slice(0, 6)
+                  )
+                }
+                placeholder="ABC123"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoComplete="one-time-code"
+                spellCheck={false}
                 required
                 autoFocus
+                style={{
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace",
+                  fontSize: "1.5rem",
+                  textAlign: "center",
+                  letterSpacing: "0.3em",
+                  textTransform: "uppercase",
+                }}
               />
             </div>
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || code.length !== 6}
               className="btn-primary"
-              style={{ height: "3rem", fontSize: "1.0625rem", marginTop: "0.5rem" }}
+              style={{
+                height: "3rem",
+                fontSize: "1.0625rem",
+                marginTop: "0.5rem",
+                opacity: loading || code.length !== 6 ? 0.6 : 1,
+              }}
             >
               {loading ? "Linking…" : "Link Child's Account"}
             </button>
           </form>
 
-          <p
-            style={{
-              textAlign: "center",
-              marginTop: "1.25rem",
-              color: "#64748B",
-              fontSize: "0.875rem",
-              lineHeight: 1.6,
-            }}
-          >
-            Your child must already have a Resolution Nation account. If they don&apos;t,{" "}
-            <Link href="/auth/signup" style={{ color: "#028090", fontWeight: 600 }}>
-              create one here
-            </Link>
-            .
-          </p>
-
           <div
             style={{
-              marginTop: "1rem",
-              padding: "0.75rem",
+              marginTop: "1.25rem",
+              padding: "0.875rem",
               background: "#F8FAFC",
               borderRadius: "8px",
-              fontSize: "0.8125rem",
-              color: "#64748B",
-              lineHeight: 1.5,
+              fontSize: "0.875rem",
+              color: "#475569",
+              lineHeight: 1.55,
             }}
           >
-            <strong>Note:</strong> For students under 13, you can also ask their teacher
-            to send you a parent-link code from the classroom settings.
+            <strong style={{ color: "#0C2340" }}>How do I get a code?</strong>
+            <br />
+            Your child can generate one from the &ldquo;Invite a parent&rdquo;
+            screen in their student dashboard. Codes expire after 7 days and can
+            be used once.
           </div>
 
           <div className="flex justify-center mt-4">
