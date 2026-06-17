@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import Link from "next/link";
+import { UserPlus, Check } from "lucide-react";
 
 export default function InviteParentPage() {
   const [code, setCode] = useState<string | null>(null);
@@ -48,12 +49,14 @@ export default function InviteParentPage() {
       <div style={{ width: "100%", maxWidth: "440px" }}>
         <div className="card">
           <div className="text-center mb-6">
-            <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>👨‍👩‍👧</div>
+            <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+              <UserPlus size={44} color="#028090" aria-hidden="true" />
+            </div>
             <h1
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.5rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
                 marginBottom: "0.5rem",
               }}
@@ -140,14 +143,21 @@ export default function InviteParentPage() {
               <button
                 type="button"
                 onClick={copy}
-                className="btn-primary"
+                className="btn-primary flex items-center justify-center gap-1"
                 style={{
                   height: "2.75rem",
                   width: "100%",
                   marginBottom: "0.75rem",
                 }}
               >
-                {copied ? "✓ Copied" : "Copy Code"}
+                {copied ? (
+                  <>
+                    <Check size={16} aria-hidden="true" />
+                    Copied
+                  </>
+                ) : (
+                  "Copy Code"
+                )}
               </button>
 
               <button

@@ -176,7 +176,19 @@ button:focus-visible {
   margin-bottom: 1rem;
 }
 
+/* ── Star pill celebration pulse ───────────────────────────────────────── */
+
+@keyframes starPillPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.5); }
+  50% { transform: scale(1.12); box-shadow: 0 0 0 10px rgba(217, 119, 6, 0); }
+}
+
+.star-pill-pulse {
+  animation: starPillPulse 0.6s ease-in-out 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 1.6s; }
   .card-hover, .card-hover:hover { transform: none; transition: none; }
+  .star-pill-pulse { animation: none; }
 }

@@ -5,7 +5,19 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import confetti from "canvas-confetti";
 import { createClient } from "@/lib/supabase/client";
+import {
+  Star,
+  Lightbulb,
+  Check,
+  X,
+  Rocket,
+  BookOpen,
+  Sprout,
+  PartyPopper,
+  BicepsFlexed,
+} from "lucide-react";
 import type { Profile, Goal, RoadmapStep, RoadmapQuestion } from "@/types";
 
 // ─── Difficulty helpers ───────────────────────────────────────────────────────
@@ -21,14 +33,25 @@ function raiseLevel(d: Difficulty): Difficulty {
 function lowerLevel(d: Difficulty): Difficulty {
   return DIFF_ORDER[Math.max(DIFF_ORDER.indexOf(d) - 1, 0)];
 }
-function diffStars(d: Difficulty): string {
-  return d === "easy" ? "⭐" : d === "medium" ? "⭐⭐" : "⭐⭐⭐";
+function diffStarCount(d: Difficulty): number {
+  return d === "easy" ? 1 : d === "medium" ? 2 : 3;
 }
 function diffLabel(d: Difficulty): string {
   return d === "easy" ? "Beginner" : d === "medium" ? "Intermediate" : "Advanced";
 }
-function diffEmoji(d: Difficulty): string {
-  return d === "easy" ? "🌱" : d === "medium" ? "🌟" : "🚀";
+function DiffIcon({ d, size = 16 }: { d: Difficulty; size?: number }) {
+  if (d === "easy") return <Sprout size={size} color="#02C39A" aria-hidden="true" />;
+  if (d === "medium") return <Star size={size} color="#D97706" fill="#D97706" aria-hidden="true" />;
+  return <Rocket size={size} color="#7C3AED" aria-hidden="true" />;
+}
+function DiffStars({ d, size = 13 }: { d: Difficulty; size?: number }) {
+  return (
+    <span className="inline-flex items-center" style={{ gap: "1px" }}>
+      {Array.from({ length: diffStarCount(d) }).map((_, i) => (
+        <Star key={i} size={size} color="#D97706" fill="#D97706" aria-hidden="true" />
+      ))}
+    </span>
+  );
 }
 
 interface WorkoutResponse {
@@ -64,7 +87,7 @@ export default function WorkoutPage() {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showHint, setShowHint] = useState(false);
   const [responses, setResponses] = useState<WorkoutResponse[]>([]);
-  const [levelMsg, setLevelMsg] = useState<string | null>(null);
+  const [levelMsg, setLevelMsg] = useState<{ kind: "up" | "down"; text: string } | null>(null);
   const [sustainedAt, setSustainedAt] = useState<{ difficulty: Difficulty; count: number }>({
     difficulty: "easy",
     count: 0,
@@ -74,6 +97,12 @@ export default function WorkoutPage() {
   // ── Results state
   const [starsEarned, setStarsEarned] = useState(0);
   const [score, setScore] = useState({ correct: 0, total: 0 });
+
+  // ── Star balance + celebration state
+  const [starBalance, setStarBalance] = useState(0);
+  const [displayBalance, setDisplayBalance] = useState(0);
+  const [displayStarsEarned, setDisplayStarsEarned] = useState(0);
+  const [pillPulse, setPillPulse] = useState(false);
 
   const questionStartRef = useRef<number>(Date.now());
 
@@ -100,6 +129,26 @@ export default function WorkoutPage() {
         return;
       }
       setProfile(profileData);
+
+      // Get current star balance (pre-workout), so the celebration can
+      // animate from this starting point once the workout is finished.
+      const { data: stars } = await supabase
+        .from("star_transactions")
+        .select("amount, type")
+        .eq("user_id", user.id);
+      if (stars) {
+        const balance = stars.reduce((sum, tx) => {
+          if (tx.type === "earned" || tx.type === "bonus" || tx.type === "gift_received") {
+            return sum + tx.amount;
+          }
+          if (tx.type === "gift_sent" || tx.type === "purchase") {
+            return sum - tx.amount;
+          }
+          return sum;
+        }, 0);
+        setStarBalance(balance);
+        setDisplayBalance(balance);
+      }
 
       const { data: stepData } = await supabase
         .from("roadmap_steps")
@@ -161,6 +210,53 @@ export default function WorkoutPage() {
     }
   }, [gamePhase, questions]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Celebration: count-up + confetti + header pill pulse on completion ────
+
+  useEffect(() => {
+    if (gamePhase !== "results") return;
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      setDisplayStarsEarned(starsEarned);
+      setDisplayBalance(starBalance + starsEarned);
+      return;
+    }
+
+    confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ["#D97706", "#028090", "#02C39A", "#7C3AED"],
+    });
+
+    setPillPulse(true);
+    const pulseTimeout = setTimeout(() => setPillPulse(false), 1200);
+
+    const duration = 1200;
+    const startTime = performance.now();
+    const startBalance = starBalance;
+    const targetBalance = starBalance + starsEarned;
+    let frame: number;
+
+    function tick(now: number) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayStarsEarned(Math.round(starsEarned * eased));
+      setDisplayBalance(Math.round(startBalance + (targetBalance - startBalance) * eased));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    }
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(pulseTimeout);
+    };
+  }, [gamePhase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Question selection ─────────────────────────────────────────────────────
 
   function pickFrom(
@@ -215,14 +311,14 @@ export default function WorkoutPage() {
       const up = raiseLevel(currentDifficulty);
       if (up !== currentDifficulty) {
         newDiff = up;
-        setLevelMsg("🚀 Level Up!");
+        setLevelMsg({ kind: "up", text: "Level Up!" });
         setTimeout(() => setLevelMsg(null), 2000);
       }
     } else if (incorrectCount >= 2) {
       const down = lowerLevel(currentDifficulty);
       if (down !== currentDifficulty) {
         newDiff = down;
-        setLevelMsg("Let's slow down a bit 📚");
+        setLevelMsg({ kind: "down", text: "Let's slow down a bit" });
         setTimeout(() => setLevelMsg(null), 2000);
       }
     }
@@ -366,7 +462,6 @@ export default function WorkoutPage() {
 
   if (gamePhase === "results" || gamePhase === "saving" || gamePhase === "saved") {
     const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0;
-    const celebration = pct >= 80 ? "🎉" : pct >= 60 ? "⭐" : "💪";
     const headline = pct >= 80 ? "Excellent Work!" : pct >= 60 ? "Good Job!" : "Keep Practicing!";
 
     return (
@@ -383,19 +478,39 @@ export default function WorkoutPage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "1.5rem" }}>🌟</span>
+            <Star size={22} color="#D97706" fill="#D97706" aria-hidden="true" />
             <span
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 color: "#F7F9FC",
                 fontSize: "1.25rem",
-                fontWeight: 700,
+                fontWeight: 800,
               }}
             >
               Resolution Nation
             </span>
           </div>
-          <span style={{ color: "#94A3B8", fontSize: "0.875rem" }}>{profile?.full_name}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              id="header-star-pill"
+              className={pillPulse ? "star-pill-pulse" : undefined}
+              style={{
+                background: "#D97706",
+                color: "white",
+                borderRadius: "100px",
+                padding: "0.25rem 0.875rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.375rem",
+                fontWeight: 700,
+                fontSize: "0.9375rem",
+              }}
+            >
+              <Star size={15} color="white" fill="white" aria-hidden="true" />
+              <span>{displayBalance}</span>
+            </div>
+            <span style={{ color: "#94A3B8", fontSize: "0.875rem" }}>{profile?.full_name}</span>
+          </div>
         </header>
 
         <main
@@ -406,14 +521,20 @@ export default function WorkoutPage() {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "5rem", marginBottom: "1rem", lineHeight: 1 }}>
-            {celebration}
+          <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+            {pct >= 80 ? (
+              <PartyPopper size={72} color="#D97706" aria-hidden="true" />
+            ) : pct >= 60 ? (
+              <Star size={72} color="#D97706" fill="#D97706" aria-hidden="true" />
+            ) : (
+              <BicepsFlexed size={72} color="#028090" aria-hidden="true" />
+            )}
           </div>
           <h1
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               fontSize: "2rem",
-              fontWeight: 700,
+              fontWeight: 800,
               color: "#0C2340",
               marginBottom: "0.5rem",
             }}
@@ -439,6 +560,7 @@ export default function WorkoutPage() {
               Stars Earned
             </div>
             <div
+              className="flex items-center justify-center gap-2"
               style={{
                 fontSize: "3.25rem",
                 fontWeight: 700,
@@ -447,7 +569,8 @@ export default function WorkoutPage() {
                 marginBottom: "0.375rem",
               }}
             >
-              ⭐ {starsEarned}
+              <Star size={36} color="#D97706" fill="#D97706" aria-hidden="true" />
+              {displayStarsEarned}
             </div>
             <div style={{ fontSize: "0.875rem", color: "#94A3B8" }}>
               {pct >= 80 ? "Full reward — amazing!" : pct >= 60 ? "Nice effort!" : "Try again to earn more stars!"}
@@ -467,21 +590,31 @@ export default function WorkoutPage() {
             <div style={{ fontSize: "0.9375rem", color: "#64748B", marginBottom: "0.375rem" }}>
               Highest Level Reached
             </div>
-            <div style={{ fontSize: "1.375rem", fontWeight: 700, color: "#028090" }}>
-              {diffLabel(highestSustained)} {diffEmoji(highestSustained)} {diffStars(highestSustained)}
+            <div className="flex items-center justify-center gap-2" style={{ fontSize: "1.375rem", fontWeight: 700, color: "#028090" }}>
+              {diffLabel(highestSustained)}
+              <DiffIcon d={highestSustained} size={20} />
+              <DiffStars d={highestSustained} size={16} />
             </div>
           </div>
 
           {/* Action buttons */}
           {gamePhase === "saving" || gamePhase === "saved" ? (
             <div
+              className="flex items-center justify-center gap-2"
               style={{
                 color: "#028090",
                 fontSize: "1.0625rem",
                 fontWeight: 600,
               }}
             >
-              {gamePhase === "saved" ? "✓ Saved! Returning to roadmap…" : "Saving results…"}
+              {gamePhase === "saved" ? (
+                <>
+                  <Check size={18} aria-hidden="true" />
+                  Saved! Returning to roadmap…
+                </>
+              ) : (
+                "Saving results…"
+              )}
             </div>
           ) : (
             <div
@@ -553,10 +686,10 @@ export default function WorkoutPage() {
         <div>
           <div
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               color: "#F7F9FC",
               fontSize: "1rem",
-              fontWeight: 700,
+              fontWeight: 800,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -572,8 +705,29 @@ export default function WorkoutPage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+          {/* Star balance */}
+          <div
+            id="header-star-pill"
+            className={pillPulse ? "star-pill-pulse" : undefined}
+            style={{
+              background: "#D97706",
+              color: "white",
+              borderRadius: "100px",
+              padding: "0.25rem 0.75rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+              fontWeight: 700,
+              fontSize: "0.8125rem",
+            }}
+          >
+            <Star size={13} color="white" fill="white" aria-hidden="true" />
+            <span>{displayBalance}</span>
+          </div>
+
           {/* Difficulty indicator */}
           <div
+            className="flex items-center gap-1"
             style={{
               background: "rgba(255,255,255,0.12)",
               borderRadius: "6px",
@@ -583,7 +737,7 @@ export default function WorkoutPage() {
               fontWeight: 600,
             }}
           >
-            Level: {diffStars(currentDifficulty)}
+            Level: <DiffStars d={currentDifficulty} size={12} />
           </div>
 
           {/* Question progress */}
@@ -617,6 +771,7 @@ export default function WorkoutPage() {
       {/* Level-up toast */}
       {levelMsg && (
         <div
+          className="flex items-center gap-2"
           style={{
             position: "fixed",
             top: "80px",
@@ -633,7 +788,12 @@ export default function WorkoutPage() {
             whiteSpace: "nowrap",
           }}
         >
-          {levelMsg}
+          {levelMsg.kind === "up" ? (
+            <Rocket size={18} aria-hidden="true" />
+          ) : (
+            <BookOpen size={18} aria-hidden="true" />
+          )}
+          {levelMsg.text}
         </div>
       )}
 
@@ -666,9 +826,9 @@ export default function WorkoutPage() {
             >
               <p
                 style={{
-                  fontFamily: "Georgia, serif",
+                  fontFamily: "var(--font-nunito), sans-serif",
                   fontSize: "1.25rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   color: "#0C2340",
                   lineHeight: 1.55,
                   margin: 0,
@@ -679,6 +839,7 @@ export default function WorkoutPage() {
 
               {showHint && (
                 <div
+                  className="flex items-start gap-2"
                   style={{
                     background: "#FEF3C7",
                     borderRadius: "8px",
@@ -689,7 +850,8 @@ export default function WorkoutPage() {
                     marginTop: "1.25rem",
                   }}
                 >
-                  💡 {currentQ.hint}
+                  <Lightbulb size={18} style={{ flexShrink: 0, marginTop: "1px" }} aria-hidden="true" />
+                  {currentQ.hint}
                 </div>
               )}
             </div>
@@ -698,6 +860,7 @@ export default function WorkoutPage() {
             {!showHint && selectedAnswer === null && (
               <button
                 onClick={() => setShowHint(true)}
+                className="flex items-center gap-1"
                 style={{
                   background: "none",
                   border: "none",
@@ -709,7 +872,7 @@ export default function WorkoutPage() {
                   padding: "0.25rem 0",
                 }}
               >
-                Need a hint? 💡
+                Need a hint? <Lightbulb size={16} aria-hidden="true" />
               </button>
             )}
 
@@ -797,10 +960,10 @@ export default function WorkoutPage() {
                     </span>
                     <span style={{ flex: 1, lineHeight: 1.4 }}>{option}</span>
                     {showingFeedback && isCorrectAnswer && (
-                      <span style={{ fontSize: "1.125rem", flexShrink: 0 }}>✓</span>
+                      <Check size={18} style={{ flexShrink: 0 }} aria-hidden="true" />
                     )}
                     {showingFeedback && isSelected && !isCorrectAnswer && (
-                      <span style={{ fontSize: "1.125rem", flexShrink: 0 }}>✗</span>
+                      <X size={18} style={{ flexShrink: 0 }} aria-hidden="true" />
                     )}
                   </button>
                 );
@@ -810,6 +973,7 @@ export default function WorkoutPage() {
             {/* Inline feedback */}
             {selectedAnswer !== null && (
               <div
+                className="flex items-center gap-1"
                 style={{
                   marginTop: "1rem",
                   fontSize: "1rem",
@@ -818,9 +982,17 @@ export default function WorkoutPage() {
                     selectedAnswer === currentQ.correct_index ? "#059669" : "#DC2626",
                 }}
               >
-                {selectedAnswer === currentQ.correct_index
-                  ? "✓ Correct!"
-                  : "✗ Incorrect — see the correct answer above"}
+                {selectedAnswer === currentQ.correct_index ? (
+                  <>
+                    <Check size={18} aria-hidden="true" />
+                    Correct!
+                  </>
+                ) : (
+                  <>
+                    <X size={18} aria-hidden="true" />
+                    Incorrect — see the correct answer above
+                  </>
+                )}
               </div>
             )}
           </>

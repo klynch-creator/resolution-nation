@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Star, Layers, Gift, Check } from "lucide-react";
 import type { Profile, StarStoreItem, UserInventory, Rarity } from "@/types";
 
 const RARITY_COLOR: Record<Rarity, string> = {
@@ -39,10 +40,10 @@ function rarityLabel(r: Rarity) {
 
 function NavBar({ active }: { active: string }) {
   const links = [
-    { href: "/dashboard/student", label: "Dashboard" },
-    { href: "/dashboard/student/goals", label: "My Goals" },
-    { href: "/dashboard/student/store", label: "⭐ Store" },
-    { href: "/dashboard/student/collection", label: "🃏 Collection" },
+    { href: "/dashboard/student", label: "Dashboard", Icon: null },
+    { href: "/dashboard/student/goals", label: "My Goals", Icon: null },
+    { href: "/dashboard/student/store", label: "Store", Icon: Star },
+    { href: "/dashboard/student/collection", label: "Collection", Icon: Layers },
   ];
   return (
     <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
@@ -68,11 +69,13 @@ function NavBar({ active }: { active: string }) {
               height: "100%",
               display: "flex",
               alignItems: "center",
+              gap: "0.375rem",
               borderBottom: active === l.label ? "2px solid #028090" : "2px solid transparent",
               textDecoration: "none",
               whiteSpace: "nowrap",
             }}
           >
+            {l.Icon && <l.Icon size={15} aria-hidden="true" />}
             {l.label}
           </Link>
         ))}
@@ -252,13 +255,13 @@ export default function CollectionPage() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ fontSize: "1.5rem" }}>🌟</span>
+          <Star size={22} color="#D97706" fill="#D97706" aria-hidden="true" />
           <span
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               color: "#F7F9FC",
               fontSize: "1.25rem",
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             Resolution Nation
@@ -281,7 +284,7 @@ export default function CollectionPage() {
         </div>
       </header>
 
-      <NavBar active="🃏 Collection" />
+      <NavBar active="Collection" />
 
       <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "2rem 1.25rem" }}>
         <div
@@ -296,9 +299,9 @@ export default function CollectionPage() {
         >
           <h1
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               fontSize: "1.75rem",
-              fontWeight: 700,
+              fontWeight: 800,
               color: "#0C2340",
             }}
           >
@@ -309,10 +312,11 @@ export default function CollectionPage() {
           </h1>
           <Link
             href="/dashboard/student/store"
-            className="btn-primary"
+            className="btn-primary flex items-center gap-1"
             style={{ textDecoration: "none", fontSize: "0.875rem" }}
           >
-            ⭐ Visit Store
+            <Star size={15} color="white" fill="white" aria-hidden="true" />
+            Visit Store
           </Link>
         </div>
 
@@ -326,12 +330,14 @@ export default function CollectionPage() {
               background: "transparent",
             }}
           >
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🃏</div>
+            <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+              <Layers size={48} color="#CBD5E1" aria-hidden="true" />
+            </div>
             <p
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.125rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
                 marginBottom: "0.5rem",
               }}
@@ -341,8 +347,9 @@ export default function CollectionPage() {
             <p style={{ color: "#64748B", marginBottom: "1.25rem" }}>
               Head to the Star Store to get started.
             </p>
-            <Link href="/dashboard/student/store" className="btn-primary" style={{ textDecoration: "none" }}>
-              ⭐ Go to Store
+            <Link href="/dashboard/student/store" className="btn-primary flex items-center justify-center gap-1" style={{ textDecoration: "none" }}>
+              <Star size={15} color="white" fill="white" aria-hidden="true" />
+              Go to Store
             </Link>
           </div>
         ) : (
@@ -428,8 +435,9 @@ export default function CollectionPage() {
                           {item.is_giftable && !entry.gifted_from_user_id && (
                             <button
                               onClick={() => openGiftModal(entry)}
+                              className="flex items-center justify-center gap-1"
                               style={{
-                                display: "block",
+                                display: "flex",
                                 width: "100%",
                                 background: "white",
                                 color: "#7C3AED",
@@ -441,18 +449,21 @@ export default function CollectionPage() {
                                 cursor: "pointer",
                               }}
                             >
-                              🎁 Gift
+                              <Gift size={14} aria-hidden="true" />
+                              Gift
                             </button>
                           )}
                           {entry.gifted_from_user_id && (
                             <div
+                              className="flex items-center justify-center gap-1"
                               style={{
                                 fontSize: "0.75rem",
                                 color: "#9CA3AF",
                                 marginTop: "0.25rem",
                               }}
                             >
-                              🎁 Received as gift
+                              <Gift size={12} aria-hidden="true" />
+                              Received as gift
                             </div>
                           )}
                         </div>
@@ -530,14 +541,14 @@ export default function CollectionPage() {
           >
             {giftSuccess ? (
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>
-                  🎁
+                <div style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "center" }}>
+                  <Gift size={48} color="#7C3AED" aria-hidden="true" />
                 </div>
                 <h2
                   style={{
-                    fontFamily: "Georgia, serif",
+                    fontFamily: "var(--font-nunito), sans-serif",
                     fontSize: "1.25rem",
-                    fontWeight: 700,
+                    fontWeight: 800,
                     color: "#0C2340",
                     marginBottom: "0.5rem",
                   }}
@@ -562,9 +573,9 @@ export default function CollectionPage() {
                   <div>
                     <h2
                       style={{
-                        fontFamily: "Georgia, serif",
+                        fontFamily: "var(--font-nunito), sans-serif",
                         fontSize: "1.125rem",
-                        fontWeight: 700,
+                        fontWeight: 800,
                         color: "#0C2340",
                       }}
                     >
@@ -638,7 +649,7 @@ export default function CollectionPage() {
                           {pm.full_name}
                         </span>
                         {selectedRecipient === pm.user_id && (
-                          <span style={{ marginLeft: "auto", color: "#028090" }}>✓</span>
+                          <Check size={18} color="#028090" style={{ marginLeft: "auto" }} aria-hidden="true" />
                         )}
                       </button>
                     ))}
@@ -679,9 +690,9 @@ export default function CollectionPage() {
                   </div>
                   <h2
                     style={{
-                      fontFamily: "Georgia, serif",
+                      fontFamily: "var(--font-nunito), sans-serif",
                       fontSize: "1.125rem",
-                      fontWeight: 700,
+                      fontWeight: 800,
                       color: "#0C2340",
                       marginBottom: "0.375rem",
                     }}
@@ -730,6 +741,7 @@ export default function CollectionPage() {
                   <button
                     onClick={handleGift}
                     disabled={gifting}
+                    className="flex items-center justify-center gap-1"
                     style={{
                       flex: 1,
                       background: "linear-gradient(135deg, #7C3AED 0%, #9F67FA 100%)",
@@ -742,7 +754,14 @@ export default function CollectionPage() {
                       opacity: gifting ? 0.7 : 1,
                     }}
                   >
-                    {gifting ? "Sending…" : "🎁 Send Gift!"}
+                    {gifting ? (
+                      "Sending…"
+                    ) : (
+                      <>
+                        <Gift size={16} aria-hidden="true" />
+                        Send Gift!
+                      </>
+                    )}
                   </button>
                 </div>
               </>

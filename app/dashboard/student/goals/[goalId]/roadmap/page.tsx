@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Star, Lock, Check } from "lucide-react";
 import type { Profile, Goal, LearningRoadmap, RoadmapStep } from "@/types";
 
 export default function StudentRoadmapPage() {
@@ -102,13 +103,13 @@ export default function StudentRoadmapPage() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ fontSize: "1.5rem" }}>🌟</span>
+          <Star size={22} color="#D97706" fill="#D97706" aria-hidden="true" />
           <span
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               color: "#F7F9FC",
               fontSize: "1.25rem",
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             Resolution Nation
@@ -185,9 +186,9 @@ export default function StudentRoadmapPage() {
         {/* Goal */}
         <h1
           style={{
-            fontFamily: "Georgia, serif",
+            fontFamily: "var(--font-nunito), sans-serif",
             fontSize: "1.625rem",
-            fontWeight: 700,
+            fontWeight: 800,
             color: "#0C2340",
             lineHeight: 1.35,
             marginBottom: "1.5rem",
@@ -199,8 +200,10 @@ export default function StudentRoadmapPage() {
         {/* No approved roadmap */}
         {!roadmap && (
           <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔒</div>
-            <p style={{ fontFamily: "Georgia, serif", fontSize: "1.125rem", fontWeight: 700, color: "#0C2340", marginBottom: "0.5rem" }}>
+            <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+              <Lock size={48} color="#CBD5E1" aria-hidden="true" />
+            </div>
+            <p style={{ fontFamily: "var(--font-nunito), sans-serif", fontSize: "1.125rem", fontWeight: 800, color: "#0C2340", marginBottom: "0.5rem" }}>
               Roadmap not ready yet
             </p>
             <p style={{ color: "#64748B", marginBottom: "1.5rem" }}>
@@ -220,8 +223,8 @@ export default function StudentRoadmapPage() {
                 <span style={{ fontSize: "0.9375rem", fontWeight: 600, color: "#374151" }}>
                   Your Progress
                 </span>
-                <span style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#028090" }}>
-                  {completedCount}/{steps.length} steps · ⭐ {totalStars} stars to earn
+                <span className="flex items-center gap-1" style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#028090" }}>
+                  {completedCount}/{steps.length} steps · <Star size={14} color="#D97706" fill="#D97706" aria-hidden="true" /> {totalStars} stars to earn
                 </span>
               </div>
               <div
@@ -307,7 +310,13 @@ export default function StudentRoadmapPage() {
                           animation: isActive ? "pulse 2s ease-in-out infinite" : "none",
                         }}
                       >
-                        {isCompleted ? "✓" : isLocked ? "🔒" : step.step_order}
+                        {isCompleted ? (
+                          <Check size={20} color="currentColor" aria-hidden="true" />
+                        ) : isLocked ? (
+                          <Lock size={18} color="currentColor" aria-hidden="true" />
+                        ) : (
+                          step.step_order
+                        )}
                       </div>
 
                       {/* Content */}
@@ -316,9 +325,9 @@ export default function StudentRoadmapPage() {
                           <div>
                             <p
                               style={{
-                                fontFamily: "Georgia, serif",
+                                fontFamily: "var(--font-nunito), sans-serif",
                                 fontSize: "1rem",
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 color: isLocked ? "#94A3B8" : "#0C2340",
                                 marginBottom: "0.25rem",
                               }}
@@ -338,13 +347,15 @@ export default function StudentRoadmapPage() {
                               </p>
                             )}
                             <span
+                              className="flex items-center gap-1"
                               style={{
                                 fontSize: "0.8125rem",
                                 color: "#D97706",
                                 fontWeight: 600,
                               }}
                             >
-                              ⭐ {step.star_reward} stars
+                              <Star size={13} color="#D97706" fill="#D97706" aria-hidden="true" />
+                              {step.star_reward} stars
                             </span>
                           </div>
 
@@ -372,6 +383,7 @@ export default function StudentRoadmapPage() {
 
                           {isCompleted && (
                             <span
+                              className="flex items-center gap-1"
                               style={{
                                 background: "#ECFDF5",
                                 color: "#059669",
@@ -382,7 +394,8 @@ export default function StudentRoadmapPage() {
                                 flexShrink: 0,
                               }}
                             >
-                              ✓ Done
+                              <Check size={14} aria-hidden="true" />
+                              Done
                             </span>
                           )}
                         </div>

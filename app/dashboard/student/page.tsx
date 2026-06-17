@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { Star, Target, Map, School, Layers } from "lucide-react";
 import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
 
 export default function StudentDashboard() {
@@ -143,13 +144,13 @@ export default function StudentDashboard() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ fontSize: "1.5rem" }}>🌟</span>
+          <Star size={22} color="#D97706" fill="#D97706" aria-hidden="true" />
           <span
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               color: "#F7F9FC",
               fontSize: "1.25rem",
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             Resolution Nation
@@ -157,6 +158,7 @@ export default function StudentDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div
+            id="header-star-pill"
             style={{
               background: "#D97706",
               color: "white",
@@ -169,7 +171,7 @@ export default function StudentDashboard() {
               fontSize: "0.9375rem",
             }}
           >
-            <span>⭐</span>
+            <Star size={15} color="white" fill="white" aria-hidden="true" />
             <span>{starBalance}</span>
           </div>
           <button
@@ -200,10 +202,10 @@ export default function StudentDashboard() {
           }}
         >
           {[
-            { href: "/dashboard/student", label: "Dashboard", active: true },
-            { href: "/dashboard/student/goals", label: "My Goals", active: false },
-            { href: "/dashboard/student/store", label: "⭐ Store", active: false },
-            { href: "/dashboard/student/collection", label: "🃏 Collection", active: false },
+            { href: "/dashboard/student", label: "Dashboard", active: true, Icon: null },
+            { href: "/dashboard/student/goals", label: "My Goals", active: false, Icon: null },
+            { href: "/dashboard/student/store", label: "Store", active: false, Icon: Star },
+            { href: "/dashboard/student/collection", label: "Collection", active: false, Icon: Layers },
           ].map((link) => (
             <Link
               key={link.href}
@@ -216,11 +218,13 @@ export default function StudentDashboard() {
                 height: "100%",
                 display: "flex",
                 alignItems: "center",
+                gap: "0.375rem",
                 borderBottom: link.active ? "2px solid #028090" : "2px solid transparent",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
               }}
             >
+              {link.Icon && <link.Icon size={15} aria-hidden="true" />}
               {link.label}
             </Link>
           ))}
@@ -260,13 +264,13 @@ export default function StudentDashboard() {
         >
           <h1
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               fontSize: "2rem",
-              fontWeight: 700,
+              fontWeight: 800,
               marginBottom: "0.5rem",
             }}
           >
-            Hey {firstName}! 👋
+            Hey {firstName}!
           </h1>
           <p style={{ fontSize: "1.125rem", opacity: 0.9 }}>
             Ready to crush your goals today?
@@ -284,7 +288,7 @@ export default function StudentDashboard() {
                 fontSize: "0.9375rem",
               }}
             >
-              <span>🏫</span>
+              <School size={18} aria-hidden="true" />
               <span>{classroom.name}</span>
             </div>
           )}
@@ -293,17 +297,17 @@ export default function StudentDashboard() {
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
-            { label: "My Stars", value: starBalance, icon: "⭐", color: "#D97706" },
-            { label: "My Goals", value: goals.length, icon: "🎯", color: "#028090" },
-            { label: "Roadmaps", value: Object.keys(roadmaps).length, icon: "🗺", color: "#7C3AED" },
+            { label: "My Stars", value: starBalance, Icon: Star, color: "#D97706" },
+            { label: "My Goals", value: goals.length, Icon: Target, color: "#028090" },
+            { label: "Roadmaps", value: Object.keys(roadmaps).length, Icon: Map, color: "#7C3AED" },
           ].map((stat) => (
             <div
               key={stat.label}
               className="card text-center"
               style={{ padding: "1.25rem 0.75rem" }}
             >
-              <div style={{ fontSize: "2rem", marginBottom: "0.375rem" }}>
-                {stat.icon}
+              <div style={{ marginBottom: "0.375rem", display: "flex", justifyContent: "center" }}>
+                <stat.Icon size={28} color={stat.color} aria-hidden="true" />
               </div>
               <div
                 style={{
@@ -327,14 +331,16 @@ export default function StudentDashboard() {
         <div className="card mb-6">
           <div className="flex items-center justify-between" style={{ marginBottom: "1rem" }}>
             <h2
+              className="flex items-center gap-2"
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.25rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
               }}
             >
-              My Goals 🎯
+              My Goals
+              <Target size={20} color="#028090" aria-hidden="true" />
             </h2>
             {goals.length > 0 && (
               <Link
@@ -348,7 +354,9 @@ export default function StudentDashboard() {
 
           {goals.length === 0 ? (
             <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "#64748B" }}>
-              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎯</div>
+              <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                <Target size={48} color="#CBD5E1" aria-hidden="true" />
+              </div>
               <p style={{ fontSize: "1.125rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem" }}>
                 No goals yet!
               </p>
@@ -374,8 +382,12 @@ export default function StudentDashboard() {
                       border: "1px solid #E2E8F0",
                     }}
                   >
-                    <p style={{ fontSize: "0.9375rem", color: "#0C2340", fontWeight: 500, lineHeight: 1.4, flex: 1 }}>
-                      🎯 {goal.friendly_text}
+                    <p
+                      className="flex items-center gap-2"
+                      style={{ fontSize: "0.9375rem", color: "#0C2340", fontWeight: 500, lineHeight: 1.4, flex: 1 }}
+                    >
+                      <Target size={16} color="#028090" style={{ flexShrink: 0 }} aria-hidden="true" />
+                      {goal.friendly_text}
                     </p>
                     {roadmap ? (
                       <Link
@@ -427,11 +439,13 @@ export default function StudentDashboard() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: "2rem", marginBottom: "0.375rem" }}>⭐</div>
+              <div style={{ marginBottom: "0.375rem" }}>
+                <Star size={32} color="white" fill="white" aria-hidden="true" />
+              </div>
               <div
                 style={{
-                  fontFamily: "Georgia, serif",
-                  fontWeight: 700,
+                  fontFamily: "var(--font-nunito), sans-serif",
+                  fontWeight: 800,
                   color: "white",
                   fontSize: "1rem",
                   marginBottom: "0.25rem",
@@ -456,11 +470,13 @@ export default function StudentDashboard() {
                 cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: "2rem", marginBottom: "0.375rem" }}>🃏</div>
+              <div style={{ marginBottom: "0.375rem" }}>
+                <Layers size={32} color="white" aria-hidden="true" />
+              </div>
               <div
                 style={{
-                  fontFamily: "Georgia, serif",
-                  fontWeight: 700,
+                  fontFamily: "var(--font-nunito), sans-serif",
+                  fontWeight: 800,
                   color: "white",
                   fontSize: "1rem",
                   marginBottom: "0.25rem",
@@ -486,12 +502,14 @@ export default function StudentDashboard() {
               padding: "2rem",
             }}
           >
-            <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🏫</div>
+            <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+              <School size={40} color="#94A3B8" aria-hidden="true" />
+            </div>
             <h3
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.125rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
                 marginBottom: "0.5rem",
               }}

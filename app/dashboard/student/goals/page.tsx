@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Star, Target, ClipboardList, Map } from "lucide-react";
 import type { Profile, Goal, LearningRoadmap } from "@/types";
 
 function priorityColor(priority: string) {
@@ -97,13 +98,13 @@ export default function StudentGoalsPage() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ fontSize: "1.5rem" }}>🌟</span>
+          <Star size={22} color="#D97706" fill="#D97706" aria-hidden="true" />
           <span
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               color: "#F7F9FC",
               fontSize: "1.25rem",
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             Resolution Nation
@@ -162,15 +163,17 @@ export default function StudentGoalsPage() {
 
       <main style={{ maxWidth: "760px", margin: "0 auto", padding: "2rem 1.25rem" }}>
         <h1
+          className="flex items-center gap-2"
           style={{
-            fontFamily: "Georgia, serif",
+            fontFamily: "var(--font-nunito), sans-serif",
             fontSize: "1.75rem",
-            fontWeight: 700,
+            fontWeight: 800,
             color: "#0C2340",
             marginBottom: "1.5rem",
           }}
         >
-          My Goals 🎯
+          My Goals
+          <Target size={24} color="#028090" aria-hidden="true" />
         </h1>
 
         {goals.length === 0 ? (
@@ -183,12 +186,14 @@ export default function StudentGoalsPage() {
               background: "transparent",
             }}
           >
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎯</div>
+            <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+              <Target size={48} color="#CBD5E1" aria-hidden="true" />
+            </div>
             <p
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.125rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
                 marginBottom: "0.5rem",
               }}
@@ -214,10 +219,10 @@ export default function StudentGoalsPage() {
                 >
                   <p
                     style={{
-                      fontFamily: "Georgia, serif",
+                      fontFamily: "var(--font-nunito), sans-serif",
                       fontSize: "1rem",
                       color: "#0C2340",
-                      fontWeight: 600,
+                      fontWeight: 700,
                       marginBottom: "0.625rem",
                       lineHeight: 1.5,
                     }}
@@ -241,8 +246,9 @@ export default function StudentGoalsPage() {
                       </span>
                     )}
                     {goal.standard_code && (
-                      <span style={{ fontSize: "0.8125rem", color: "#64748B" }}>
-                        📋 {goal.standard_code}
+                      <span className="flex items-center gap-1" style={{ fontSize: "0.8125rem", color: "#64748B" }}>
+                        <ClipboardList size={14} aria-hidden="true" />
+                        {goal.standard_code}
                       </span>
                     )}
                   </div>
@@ -251,6 +257,7 @@ export default function StudentGoalsPage() {
                     <div>
                       {roadmap ? (
                         <span
+                          className="flex items-center gap-1"
                           style={{
                             background: "#ECFDF5",
                             color: "#059669",
@@ -260,7 +267,8 @@ export default function StudentGoalsPage() {
                             fontWeight: 600,
                           }}
                         >
-                          🗺 Roadmap ready!
+                          <Map size={14} aria-hidden="true" />
+                          Roadmap ready!
                         </span>
                       ) : (
                         <span

@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Star, Layers, Search, PartyPopper, Check } from "lucide-react";
 import type { Profile, StarStoreItem, Rarity } from "@/types";
 
 const RARITY_COLOR: Record<Rarity, string> = {
@@ -34,10 +35,10 @@ function rarityLabel(r: Rarity) {
 
 function NavBar({ active }: { active: string }) {
   const links = [
-    { href: "/dashboard/student", label: "Dashboard" },
-    { href: "/dashboard/student/goals", label: "My Goals" },
-    { href: "/dashboard/student/store", label: "⭐ Store" },
-    { href: "/dashboard/student/collection", label: "🃏 Collection" },
+    { href: "/dashboard/student", label: "Dashboard", Icon: null },
+    { href: "/dashboard/student/goals", label: "My Goals", Icon: null },
+    { href: "/dashboard/student/store", label: "Store", Icon: Star },
+    { href: "/dashboard/student/collection", label: "Collection", Icon: Layers },
   ];
   return (
     <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
@@ -63,11 +64,13 @@ function NavBar({ active }: { active: string }) {
               height: "100%",
               display: "flex",
               alignItems: "center",
+              gap: "0.375rem",
               borderBottom: active === l.label ? "2px solid #028090" : "2px solid transparent",
               textDecoration: "none",
               whiteSpace: "nowrap",
             }}
           >
+            {l.Icon && <l.Icon size={15} aria-hidden="true" />}
             {l.label}
           </Link>
         ))}
@@ -152,6 +155,7 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
           </span>
           {owned ? (
             <span
+              className="flex items-center gap-1"
               style={{
                 background: "#ECFDF5",
                 color: "#059669",
@@ -161,7 +165,8 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
                 fontWeight: 700,
               }}
             >
-              Owned ✓
+              <Check size={14} aria-hidden="true" />
+              Owned
             </span>
           ) : (
             <div
@@ -174,7 +179,7 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
                 color: canAfford ? "#D97706" : "#9CA3AF",
               }}
             >
-              <span>⭐</span>
+              <Star size={15} color={canAfford ? "#D97706" : "#9CA3AF"} fill={canAfford ? "#D97706" : "#9CA3AF"} aria-hidden="true" />
               <span>{item.star_cost} stars</span>
             </div>
           )}
@@ -234,6 +239,7 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
           <div onClick={(e) => e.stopPropagation()}>
             {owned ? (
               <div
+                className="flex items-center justify-center gap-1"
                 style={{
                   textAlign: "center",
                   padding: "0.5rem",
@@ -244,7 +250,8 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
                   fontSize: "0.875rem",
                 }}
               >
-                Already Owned ✓
+                <Check size={16} aria-hidden="true" />
+                Already Owned
               </div>
             ) : canAfford ? (
               <button
@@ -265,11 +272,12 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
                   gap: "0.375rem",
                 }}
               >
-                <span>⭐</span>
+                <Star size={15} color="white" fill="white" aria-hidden="true" />
                 <span>Purchase for {item.star_cost} stars</span>
               </button>
             ) : (
               <div
+                className="flex items-center justify-center gap-1"
                 style={{
                   textAlign: "center",
                   padding: "0.5rem",
@@ -280,7 +288,7 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
                   fontSize: "0.8125rem",
                 }}
               >
-                Need {item.star_cost - starBalance} more ⭐ to unlock
+                Need {item.star_cost - starBalance} more <Star size={13} color="#9CA3AF" fill="#9CA3AF" aria-hidden="true" /> to unlock
               </div>
             )}
           </div>
@@ -438,13 +446,13 @@ export default function StarStorePage() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ fontSize: "1.5rem" }}>🌟</span>
+          <Star size={22} color="#D97706" fill="#D97706" aria-hidden="true" />
           <span
             style={{
-              fontFamily: "Georgia, serif",
+              fontFamily: "var(--font-nunito), sans-serif",
               color: "#F7F9FC",
               fontSize: "1.25rem",
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             Resolution Nation
@@ -464,7 +472,7 @@ export default function StarStorePage() {
               fontSize: "0.9375rem",
             }}
           >
-            <span>⭐</span>
+            <Star size={15} color="white" fill="white" aria-hidden="true" />
             <span>{starBalance}</span>
           </div>
           <button
@@ -482,19 +490,21 @@ export default function StarStorePage() {
         </div>
       </header>
 
-      <NavBar active="⭐ Store" />
+      <NavBar active="Store" />
 
       <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "2rem 1.25rem" }}>
         <h1
+          className="flex items-center gap-2"
           style={{
-            fontFamily: "Georgia, serif",
+            fontFamily: "var(--font-nunito), sans-serif",
             fontSize: "1.75rem",
-            fontWeight: 700,
+            fontWeight: 800,
             color: "#0C2340",
             marginBottom: "1.5rem",
           }}
         >
-          ⭐ Star Store
+          <Star size={26} color="#D97706" fill="#D97706" aria-hidden="true" />
+          Star Store
         </h1>
 
         {/* Filters */}
@@ -555,8 +565,10 @@ export default function StarStorePage() {
             className="card"
             style={{ textAlign: "center", padding: "3rem", border: "2px dashed #E2E8F0", background: "transparent" }}
           >
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔍</div>
-            <p style={{ fontFamily: "Georgia, serif", fontSize: "1.125rem", color: "#0C2340", fontWeight: 700 }}>
+            <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+              <Search size={48} color="#CBD5E1" aria-hidden="true" />
+            </div>
+            <p style={{ fontFamily: "var(--font-nunito), sans-serif", fontSize: "1.125rem", color: "#0C2340", fontWeight: 800 }}>
               No items match your filters
             </p>
           </div>
@@ -610,9 +622,9 @@ export default function StarStorePage() {
             <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>{confirmItem.emoji}</div>
             <h2
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.25rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
                 marginBottom: "0.5rem",
               }}
@@ -621,8 +633,14 @@ export default function StarStorePage() {
             </h2>
             <p style={{ color: "#64748B", fontSize: "0.9375rem", marginBottom: "1.25rem" }}>
               This costs{" "}
-              <strong style={{ color: "#D97706" }}>⭐ {confirmItem.star_cost} stars</strong> and you
-              have <strong style={{ color: "#D97706" }}>⭐ {starBalance}</strong>. Are you sure?
+              <strong className="inline-flex items-center gap-1" style={{ color: "#D97706" }}>
+                <Star size={14} color="#D97706" fill="#D97706" aria-hidden="true" /> {confirmItem.star_cost} stars
+              </strong>{" "}
+              and you have{" "}
+              <strong className="inline-flex items-center gap-1" style={{ color: "#D97706" }}>
+                <Star size={14} color="#D97706" fill="#D97706" aria-hidden="true" /> {starBalance}
+              </strong>
+              . Are you sure?
             </p>
             {purchaseError && (
               <div
@@ -714,12 +732,14 @@ export default function StarStorePage() {
             <div style={{ fontSize: "5rem", marginBottom: "1rem", lineHeight: 1 }}>
               {successItem.emoji}
             </div>
-            <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🎉</div>
+            <div style={{ marginBottom: "0.5rem", display: "flex", justifyContent: "center" }}>
+              <PartyPopper size={36} color="#D97706" aria-hidden="true" />
+            </div>
             <h2
               style={{
-                fontFamily: "Georgia, serif",
+                fontFamily: "var(--font-nunito), sans-serif",
                 fontSize: "1.375rem",
-                fontWeight: 700,
+                fontWeight: 800,
                 color: "#0C2340",
                 marginBottom: "0.5rem",
               }}
@@ -731,10 +751,10 @@ export default function StarStorePage() {
             </p>
             <button
               onClick={() => setSuccessItem(null)}
-              className="btn-primary"
+              className="btn-primary flex items-center justify-center gap-1"
               style={{ width: "100%" }}
             >
-              Awesome! 🌟
+              Awesome! <Star size={16} color="white" fill="white" aria-hidden="true" />
             </button>
             <div style={{ marginTop: "0.75rem" }}>
               <Link
