@@ -107,6 +107,60 @@ export interface LearningRoadmap {
   roadmap_steps?: RoadmapStep[];
 }
 
+// ─── Phase 12: AI Lesson Engine ────────────────────────────────────────────
+
+export type LessonTier = "below" | "at" | "above";
+export type LessonSource = "library" | "roadmap";
+export type LessonStatus = "active" | "completed" | "failed";
+
+export interface Lesson {
+  id: string;
+  student_id: string;
+  source: LessonSource;
+  goal_id: string | null;
+  roadmap_step_id: string | null;
+  subject: string;
+  topic: string;
+  title: string;
+  tier: LessonTier;
+  standard_alignment: string | null;
+  activities: StepActivities;
+  star_reward: number;
+  content_key: string;
+  status: LessonStatus;
+  score_pct: number | null;
+  stars_awarded: number;
+  attempts: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface StudentSkillTier {
+  id: string;
+  student_id: string;
+  goal_id: string | null;
+  subject: string;
+  tier: LessonTier;
+  win_streak: number;
+  loss_streak: number;
+  updated_at: string;
+}
+
+/** Per-question result the client sends to complete_lesson. */
+export interface LessonResponse {
+  question_index: number;
+  difficulty: "easy" | "medium" | "hard";
+  is_correct: boolean;
+  response_time_ms: number | null;
+}
+
+/** Return shape of the complete_lesson RPC. */
+export interface CompleteLessonResult {
+  status: "completed" | "failed";
+  stars_awarded: number;
+  tier: LessonTier;
+}
+
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type ItemType = "card" | "skin" | "gift";
 
