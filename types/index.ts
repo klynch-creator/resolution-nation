@@ -161,6 +161,34 @@ export interface CompleteLessonResult {
   tier: LessonTier;
 }
 
+// ─── Phase 12D: Curriculum ingestion ───────────────────────────────────────
+
+export type CurriculumStatus = "pending" | "extracted" | "confirmed";
+
+export interface CurriculumUnit {
+  name: string;
+  sequence_order: number;
+  standards: string[];
+  skills: string[];
+}
+
+export interface CurriculumExtract {
+  units: CurriculumUnit[];
+  notes: string | null;
+}
+
+export interface Curriculum {
+  id: string;
+  teacher_id: string;
+  title: string;
+  grade: string | null;
+  subject: string | null;
+  file_url: string | null;
+  extracted: CurriculumExtract | null;
+  status: CurriculumStatus;
+  created_at: string;
+}
+
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type ItemType = "card" | "skin" | "gift";
 

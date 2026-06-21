@@ -232,6 +232,9 @@ export default function TeacherDashboard() {
           <Link href="/dashboard/teacher/students" style={navLinkStyle(false)}>
             My Students
           </Link>
+          <Link href="/dashboard/teacher/curriculum" style={navLinkStyle(false)}>
+            📚 Curriculum
+          </Link>
           <Link href="/dashboard/teacher/analytics" style={navLinkStyle(false)}>
             📊 Analytics
           </Link>
