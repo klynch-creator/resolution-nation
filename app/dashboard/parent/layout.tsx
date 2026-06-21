@@ -26,6 +26,7 @@ function navLinkStyle(active: boolean): React.CSSProperties {
 const NAV_LINKS = [
   { href: "/dashboard/parent", label: "🏠 Dashboard" },
   { href: "/dashboard/parent/goals", label: "🎯 Goals" },
+  { href: "/dashboard/parent/lessons", label: "📚 Lessons" },
   { href: "/dashboard/parent/iep", label: "📋 IEP Updates" },
   { href: "/dashboard/parent/messages", label: "💬 Messages" },
 ];

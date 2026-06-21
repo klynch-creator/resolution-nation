@@ -545,6 +545,21 @@ function StudentsContent() {
                     📊 Analytics
                   </Link>
                   <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/lessons`}
+                    style={{
+                      background: "#02C39A",
+                      color: "white",
+                      borderRadius: "8px",
+                      padding: "0.4375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    📚 Lessons
+                  </Link>
+                  <Link
                     href={`/dashboard/teacher/students/${row.profile.id}/upload`}
                     style={{
                       background: "white",
