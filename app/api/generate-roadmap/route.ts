@@ -1,48 +1,82 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import type { CurriculumExtract, RoadmapQuestion } from "@/types";
 
-const SYSTEM_PROMPT = `You are an expert K-12 curriculum designer creating personalized learning roadmaps. Create a step-by-step learning plan that is curriculum-aligned, scaffolded from easier to harder, and engaging for students.
+export const dynamic = "force-dynamic";
+
+const SYSTEM_PROMPT = `You are an expert K-12 curriculum designer creating a personalized learning roadmap for one student.
+
+A roadmap is organized into SUBGOALS (milestones that build toward the main goal). Each subgoal targets a specific skill and contains 2-3 scaffolded steps the student works through. You also produce teacher-only ASSESSMENT checkpoints aligned to the school's curriculum — these are for the teacher to gauge progress and are never shown to students or parents.
 
 Return ONLY valid JSON in exactly this format, no other text:
 {
-  "steps": [
+  "subgoals": [
     {
-      "step_order": 1,
-      "title": "string",
-      "description": "string (1-2 sentences describing what the student will do)",
-      "workout_type": "lesson|practice|quiz|test-prep",
+      "title": "string (the milestone)",
+      "description": "string (1 sentence)",
+      "target_skill": "string (the specific skill this builds toward the main goal)",
       "standard_alignment": "string (e.g. RI.3.2) or null",
-      "star_reward": 10,
-      "activities": {
-        "questions": [
-          {
-            "difficulty": "easy|medium|hard",
-            "question": "string",
-            "options": ["A", "B", "C", "D"],
-            "correct_index": 0,
-            "hint": "string"
+      "steps": [
+        {
+          "title": "string",
+          "description": "string (1-2 sentences)",
+          "workout_type": "lesson|practice|quiz|test-prep",
+          "standard_alignment": "string or null",
+          "star_reward": 10,
+          "activities": {
+            "questions": [
+              { "difficulty": "easy|medium|hard", "question": "string", "options": ["A","B","C","D"], "correct_index": 0, "hint": "string" }
+            ]
           }
-        ]
-      }
+        }
+      ]
     }
+  ],
+  "assessments": [
+    { "title": "string", "curriculum_unit": "string or null", "standard_alignment": "string or null", "teacher_notes": "string (how the teacher can assess this)" }
   ]
 }
 
 Rules:
-- Generate 5-7 steps, scaffolded from foundational to grade-level to challenge
-- Each step must have exactly 6 questions: 2 easy, 2 medium, 2 hard
-- Questions should be multiple choice with 4 options
-- correct_index is 0-based (0=A, 1=B, 2=C, 3=D)
-- star_reward: 5 for easy steps, 10 for medium, 15-20 for hard/test-prep steps
-- workout_type progression: lesson → practice → practice → quiz → quiz → test-prep (adjust as needed)
-- Questions should match NYSTP (New York State Testing Program) style for ELA and math
-- Make questions age-appropriate for the student's grade level
-- The first step should be accessible even for struggling students`;
+- 3-4 subgoals, scaffolded from foundational to grade-level to challenge.
+- Each subgoal has 2-3 steps. Each step has exactly 6 questions: 2 easy, 2 medium, 2 hard.
+- Multiple choice, exactly 4 options, correct_index 0-based.
+- star_reward: 5 easy, 10 medium, 15-20 hard/test-prep.
+- Questions match NYSTP style for ELA and math, age-appropriate for the grade.
+- The first subgoal's first step must be accessible even to a struggling student.
+- assessments: 2-4 teacher-facing checkpoints. If a curriculum is provided, align them to its units; otherwise base them on the goal's standard. These must NOT duplicate student step content.`;
+
+interface GenStep {
+  title: string;
+  description: string;
+  workout_type: string;
+  standard_alignment: string | null;
+  star_reward: number;
+  activities: { questions: RoadmapQuestion[] };
+}
+interface GenSubgoal {
+  title: string;
+  description: string | null;
+  target_skill: string | null;
+  standard_alignment: string | null;
+  steps: GenStep[];
+}
+interface GenAssessment {
+  title: string;
+  curriculum_unit: string | null;
+  standard_alignment: string | null;
+  teacher_notes: string | null;
+}
+interface GenRoadmap {
+  subgoals?: GenSubgoal[];
+  steps?: GenStep[]; // legacy flat format
+  assessments?: GenAssessment[];
+}
 
 export async function POST(request: Request) {
   try {
-    const { goalId, studentId } = await request.json();
+    const { goalId, studentId, curriculumId } = await request.json();
 
     if (!goalId || !studentId) {
       return NextResponse.json(
@@ -55,49 +89,65 @@ export async function POST(request: Request) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-
     if (!user) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
     }
 
-    // Fetch the goal
     const { data: goal, error: goalError } = await supabase
       .from("goals")
       .select("*")
       .eq("id", goalId)
       .eq("teacher_id", user.id)
       .single();
-
     if (goalError || !goal) {
       return NextResponse.json({ error: "Goal not found." }, { status: 404 });
     }
 
-    // Fetch student grade from profiles
     const { data: studentProfile } = await supabase
       .from("profiles")
       .select("grade, full_name")
       .eq("id", studentId)
       .single();
-
     const grade = studentProfile?.grade ?? "not specified";
 
-    // Call Claude API
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY!,
-    });
+    // Optional curriculum context (must belong to this teacher).
+    let curriculumBlock = "";
+    let curriculumExtract: CurriculumExtract | null = null;
+    if (curriculumId) {
+      const { data: curriculum } = await supabase
+        .from("curricula")
+        .select("title, extracted, teacher_id")
+        .eq("id", curriculumId)
+        .single();
+      if (curriculum && curriculum.teacher_id === user.id) {
+        curriculumExtract = curriculum.extracted as CurriculumExtract | null;
+        const units = (curriculumExtract?.units ?? [])
+          .map(
+            (u) =>
+              `- ${u.name}${u.standards?.length ? ` [${u.standards.join(", ")}]` : ""}${
+                u.skills?.length ? ` — skills: ${u.skills.join(", ")}` : ""
+              }`
+          )
+          .join("\n");
+        if (units) {
+          curriculumBlock = `\n\nSchool curriculum "${curriculum.title}" — align subgoals and teacher assessments to these units:\n${units}`;
+        }
+      }
+    }
 
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
     const userMessage = `Student goal: ${goal.friendly_text}
 Standard: ${goal.standard_code ?? "not specified"}
 Subject: ${goal.subject ?? "not specified"}
 Grade level: ${grade}
 Current performance: ${goal.source ?? "not specified"}
-Priority: ${goal.priority}
+Priority: ${goal.priority}${curriculumBlock}
 
-Generate a complete learning roadmap with 5-7 steps and 6 questions per step (2 easy, 2 medium, 2 hard).`;
+Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus 2-4 teacher-only assessment checkpoints.`;
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
     });
@@ -110,22 +160,13 @@ Generate a complete learning roadmap with 5-7 steps and 6 questions per step (2 
       );
     }
 
-    // Parse JSON — strip markdown code fences if present
-    let roadmapData: { steps: Array<{
-      step_order: number;
-      title: string;
-      description: string;
-      workout_type: string;
-      standard_alignment: string | null;
-      star_reward: number;
-      activities: { questions: unknown[] };
-    }> };
+    let data: GenRoadmap;
     try {
       const cleaned = content.text
         .replace(/^```(?:json)?\n?/m, "")
         .replace(/\n?```$/m, "")
         .trim();
-      roadmapData = JSON.parse(cleaned);
+      data = JSON.parse(cleaned);
     } catch {
       console.error("JSON parse error. Raw response:", content.text);
       return NextResponse.json(
@@ -134,30 +175,38 @@ Generate a complete learning roadmap with 5-7 steps and 6 questions per step (2 
       );
     }
 
-    if (!roadmapData.steps || !Array.isArray(roadmapData.steps)) {
+    // Normalize: support both subgoal format and legacy flat steps.
+    let subgoals: GenSubgoal[] = [];
+    if (Array.isArray(data.subgoals) && data.subgoals.length > 0) {
+      subgoals = data.subgoals;
+    } else if (Array.isArray(data.steps) && data.steps.length > 0) {
+      subgoals = [
+        {
+          title: "Core Skills",
+          description: null,
+          target_skill: goal.subject ?? null,
+          standard_alignment: goal.standard_code ?? null,
+          steps: data.steps,
+        },
+      ];
+    } else {
       return NextResponse.json(
         { error: "AI returned unexpected structure. Please try again." },
         { status: 500 }
       );
     }
 
-    // Delete any existing roadmap for this goal+teacher (handles regeneration)
-    const { data: existingRoadmap } = await supabase
+    // Replace any existing roadmap for this goal (cascade clears subgoals/steps/assessments).
+    const { data: existing } = await supabase
       .from("learning_roadmaps")
       .select("id")
       .eq("goal_id", goalId)
       .eq("teacher_id", user.id)
       .maybeSingle();
-
-    if (existingRoadmap) {
-      // Steps cascade-delete via FK
-      await supabase
-        .from("learning_roadmaps")
-        .delete()
-        .eq("id", existingRoadmap.id);
+    if (existing) {
+      await supabase.from("learning_roadmaps").delete().eq("id", existing.id);
     }
 
-    // Insert new roadmap
     const { data: roadmap, error: roadmapError } = await supabase
       .from("learning_roadmaps")
       .insert({
@@ -165,45 +214,77 @@ Generate a complete learning roadmap with 5-7 steps and 6 questions per step (2 
         student_id: studentId,
         teacher_id: user.id,
         status: "draft",
+        curriculum_source: curriculumId ?? null,
       })
       .select()
       .single();
-
     if (roadmapError || !roadmap) {
       console.error("Roadmap insert error:", roadmapError);
-      return NextResponse.json(
-        { error: "Failed to save roadmap." },
-        { status: 500 }
+      return NextResponse.json({ error: "Failed to save roadmap." }, { status: 500 });
+    }
+
+    // Insert subgoals + their steps. Global step_order across the whole roadmap;
+    // the very first step is active, the rest are locked.
+    let globalOrder = 0;
+    for (let si = 0; si < subgoals.length; si++) {
+      const sg = subgoals[si];
+      const { data: subgoalRow, error: sgErr } = await supabase
+        .from("roadmap_subgoals")
+        .insert({
+          roadmap_id: roadmap.id,
+          sort_order: si + 1,
+          title: sg.title,
+          description: sg.description ?? null,
+          target_skill: sg.target_skill ?? null,
+          standard_alignment: sg.standard_alignment ?? null,
+        })
+        .select()
+        .single();
+      if (sgErr || !subgoalRow) {
+        console.error("Subgoal insert error:", sgErr);
+        return NextResponse.json({ error: "Failed to save subgoals." }, { status: 500 });
+      }
+
+      const stepsToInsert = (sg.steps ?? []).map((step) => {
+        globalOrder += 1;
+        return {
+          roadmap_id: roadmap.id,
+          subgoal_id: subgoalRow.id,
+          step_order: globalOrder,
+          title: step.title,
+          description: step.description,
+          workout_type: step.workout_type,
+          standard_alignment: step.standard_alignment ?? null,
+          star_reward: step.star_reward ?? 10,
+          activities: step.activities,
+          status: globalOrder === 1 ? "active" : "locked",
+        };
+      });
+      if (stepsToInsert.length > 0) {
+        const { error: stepsErr } = await supabase.from("roadmap_steps").insert(stepsToInsert);
+        if (stepsErr) {
+          console.error("Steps insert error:", stepsErr);
+          return NextResponse.json({ error: "Failed to save roadmap steps." }, { status: 500 });
+        }
+      }
+    }
+
+    // Teacher-only assessments.
+    const assessments = Array.isArray(data.assessments) ? data.assessments : [];
+    if (assessments.length > 0) {
+      await supabase.from("roadmap_assessments").insert(
+        assessments.map((a) => ({
+          roadmap_id: roadmap.id,
+          curriculum_id: curriculumId ?? null,
+          title: a.title,
+          curriculum_unit: a.curriculum_unit ?? null,
+          standard_alignment: a.standard_alignment ?? null,
+          teacher_notes: a.teacher_notes ?? null,
+        }))
       );
     }
 
-    // Insert steps — first step active, rest locked
-    const stepsToInsert = roadmapData.steps.map((step, index) => ({
-      roadmap_id: roadmap.id,
-      step_order: step.step_order ?? index + 1,
-      title: step.title,
-      description: step.description,
-      workout_type: step.workout_type,
-      standard_alignment: step.standard_alignment ?? null,
-      star_reward: step.star_reward ?? 10,
-      activities: step.activities,
-      status: index === 0 ? "active" : "locked",
-    }));
-
-    const { data: steps, error: stepsError } = await supabase
-      .from("roadmap_steps")
-      .insert(stepsToInsert)
-      .select();
-
-    if (stepsError) {
-      console.error("Steps insert error:", stepsError);
-      return NextResponse.json(
-        { error: "Failed to save roadmap steps." },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ roadmap: { ...roadmap, roadmap_steps: steps } });
+    return NextResponse.json({ roadmap });
   } catch (err) {
     console.error("Generate roadmap error:", err);
     return NextResponse.json(

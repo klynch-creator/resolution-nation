@@ -6,7 +6,16 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile, Goal, LearningRoadmap, RoadmapStep, WorkoutType } from "@/types";
+import type {
+  Profile,
+  Goal,
+  LearningRoadmap,
+  RoadmapStep,
+  RoadmapSubgoal,
+  RoadmapAssessment,
+  Curriculum,
+  WorkoutType,
+} from "@/types";
 
 function workoutBadge(type: WorkoutType | null) {
   if (!type) return null;
@@ -59,11 +68,55 @@ export default function TeacherRoadmapPage() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [roadmap, setRoadmap] = useState<LearningRoadmap | null>(null);
   const [steps, setSteps] = useState<RoadmapStep[]>([]);
+  const [subgoals, setSubgoals] = useState<RoadmapSubgoal[]>([]);
+  const [assessments, setAssessments] = useState<RoadmapAssessment[]>([]);
+  const [curricula, setCurricula] = useState<Curriculum[]>([]);
+  const [selectedCurriculumId, setSelectedCurriculumId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
+
+  async function loadRoadmap(supabase: ReturnType<typeof createClient>) {
+    const { data: roadmapData } = await supabase
+      .from("learning_roadmaps")
+      .select("*")
+      .eq("goal_id", goalId)
+      .maybeSingle();
+
+    if (roadmapData) {
+      setRoadmap(roadmapData as LearningRoadmap);
+
+      const [{ data: stepsData }, { data: subgoalData }, { data: assessData }] =
+        await Promise.all([
+          supabase
+            .from("roadmap_steps")
+            .select("*")
+            .eq("roadmap_id", roadmapData.id)
+            .order("step_order", { ascending: true }),
+          supabase
+            .from("roadmap_subgoals")
+            .select("*")
+            .eq("roadmap_id", roadmapData.id)
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from("roadmap_assessments")
+            .select("*")
+            .eq("roadmap_id", roadmapData.id)
+            .order("created_at", { ascending: true }),
+        ]);
+
+      setSteps((stepsData as RoadmapStep[]) ?? []);
+      setSubgoals((subgoalData as RoadmapSubgoal[]) ?? []);
+      setAssessments((assessData as RoadmapAssessment[]) ?? []);
+    } else {
+      setRoadmap(null);
+      setSteps([]);
+      setSubgoals([]);
+      setAssessments([]);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -95,34 +148,18 @@ export default function TeacherRoadmapPage() {
       if (studentData) setStudent(studentData);
       if (goalData) setGoal(goalData as Goal);
 
+      // Teacher's confirmed curricula (for optional roadmap alignment).
+      const { data: curriculaData } = await supabase
+        .from("curricula")
+        .select("*")
+        .order("created_at", { ascending: false });
+      setCurricula((curriculaData as Curriculum[]) ?? []);
+
       await loadRoadmap(supabase);
       setLoading(false);
     }
     load();
   }, [studentId, goalId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function loadRoadmap(supabase: ReturnType<typeof createClient>) {
-    const { data: roadmapData } = await supabase
-      .from("learning_roadmaps")
-      .select("*")
-      .eq("goal_id", goalId)
-      .maybeSingle();
-
-    if (roadmapData) {
-      setRoadmap(roadmapData as LearningRoadmap);
-
-      const { data: stepsData } = await supabase
-        .from("roadmap_steps")
-        .select("*")
-        .eq("roadmap_id", roadmapData.id)
-        .order("step_order", { ascending: true });
-
-      setSteps((stepsData as RoadmapStep[]) ?? []);
-    } else {
-      setRoadmap(null);
-      setSteps([]);
-    }
-  }
 
   async function handleApprove() {
     if (!roadmap) return;
@@ -147,7 +184,11 @@ export default function TeacherRoadmapPage() {
       const res = await fetch("/api/generate-roadmap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goalId, studentId }),
+        body: JSON.stringify({
+          goalId,
+          studentId,
+          curriculumId: selectedCurriculumId || undefined,
+        }),
       });
       if (res.ok) {
         const supabase = createClient();
@@ -170,6 +211,8 @@ export default function TeacherRoadmapPage() {
       </div>
     );
   }
+
+  const subgoalById = new Map(subgoals.map((sg) => [sg.id, sg]));
 
   return (
     <div className="min-h-screen" style={{ background: "#F7F9FC" }}>
@@ -327,6 +370,28 @@ export default function TeacherRoadmapPage() {
                 ✓ Approved — student can now see their roadmap
               </div>
             )}
+            {curricula.length > 0 && (
+              <select
+                value={selectedCurriculumId}
+                onChange={(e) => setSelectedCurriculumId(e.target.value)}
+                title="Base the roadmap on a curriculum"
+                style={{
+                  border: "1px solid #CBD5E1",
+                  borderRadius: "8px",
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "0.875rem",
+                  color: "#374151",
+                  background: "white",
+                }}
+              >
+                <option value="">No curriculum</option>
+                {curricula.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    📚 {c.title}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               onClick={handleRegenerate}
               disabled={regenerating}
@@ -341,9 +406,28 @@ export default function TeacherRoadmapPage() {
         {/* Steps */}
         {!regenerating && steps.length > 0 && (
           <div className="flex flex-col gap-4">
-            {steps.map((step, index) => (
+            {steps.map((step, index) => {
+              const sg = step.subgoal_id ? subgoalById.get(step.subgoal_id) : undefined;
+              const prevSubgoalId = index > 0 ? steps[index - 1].subgoal_id : undefined;
+              const showHeader = sg && step.subgoal_id !== prevSubgoalId;
+              return (
+              <div key={step.id}>
+              {showHeader && sg && (
+                <div className="flex items-start gap-2" style={{ marginBottom: "0.5rem", marginTop: index === 0 ? 0 : "0.5rem" }}>
+                  <span style={{ fontSize: "1rem", flexShrink: 0 }} aria-hidden="true">🎯</span>
+                  <div>
+                    <p style={{ fontFamily: "Georgia, serif", fontSize: "1.0625rem", fontWeight: 700, color: "#0C2340" }}>
+                      {sg.title}
+                    </p>
+                    {sg.target_skill && (
+                      <p style={{ fontSize: "0.8125rem", color: "#7C3AED", fontWeight: 600 }}>
+                        Skill focus: {sg.target_skill}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div
-                key={step.id}
                 className="card"
                 style={{ borderLeft: `4px solid ${index === 0 ? "#02C39A" : "#7C3AED"}`, padding: "1.25rem" }}
               >
@@ -491,7 +575,57 @@ export default function TeacherRoadmapPage() {
                   </div>
                 )}
               </div>
-            ))}
+              </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Teacher-only: curriculum assessment checkpoints */}
+        {!regenerating && roadmap && assessments.length > 0 && (
+          <div className="card" style={{ marginTop: "1.5rem", padding: "1.5rem", borderLeft: "4px solid #0C2340" }}>
+            <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: "0.25rem" }}>
+              <h2 style={{ fontFamily: "Georgia, serif", fontSize: "1.1875rem", fontWeight: 700, color: "#0C2340" }}>
+                Assessment Checkpoints
+              </h2>
+              <span
+                style={{
+                  background: "#0C2340",
+                  color: "white",
+                  fontSize: "0.6875rem",
+                  fontWeight: 700,
+                  padding: "0.125rem 0.5rem",
+                  borderRadius: "100px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                Teacher only
+              </span>
+            </div>
+            <p style={{ fontSize: "0.8125rem", color: "#64748B", marginBottom: "1rem" }}>
+              Curriculum-aligned checkpoints to gauge progress. Not visible to students or parents.
+            </p>
+            <div className="flex flex-col gap-3">
+              {assessments.map((a) => (
+                <div key={a.id} style={{ border: "1px solid #E2E8F0", borderRadius: "10px", padding: "1rem" }}>
+                  <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: "0.25rem" }}>
+                    <span style={{ fontSize: "1rem", fontWeight: 700, color: "#0C2340" }}>{a.title}</span>
+                    {a.standard_alignment && (
+                      <span style={{ fontSize: "0.75rem", color: "#64748B" }}>📋 {a.standard_alignment}</span>
+                    )}
+                  </div>
+                  {a.curriculum_unit && (
+                    <p style={{ fontSize: "0.8125rem", color: "#7C3AED", fontWeight: 600, marginBottom: "0.25rem" }}>
+                      Unit: {a.curriculum_unit}
+                    </p>
+                  )}
+                  {a.teacher_notes && (
+                    <p style={{ fontSize: "0.875rem", color: "#374151", lineHeight: 1.5 }}>{a.teacher_notes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

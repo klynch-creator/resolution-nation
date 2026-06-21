@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Star, Lock, Check } from "lucide-react";
-import type { Profile, Goal, LearningRoadmap, RoadmapStep } from "@/types";
+import { Star, Lock, Check, Target } from "lucide-react";
+import type { Profile, Goal, LearningRoadmap, RoadmapStep, RoadmapSubgoal } from "@/types";
 
 export default function StudentRoadmapPage() {
   const router = useRouter();
@@ -18,6 +18,7 @@ export default function StudentRoadmapPage() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [roadmap, setRoadmap] = useState<LearningRoadmap | null>(null);
   const [steps, setSteps] = useState<RoadmapStep[]>([]);
+  const [subgoals, setSubgoals] = useState<RoadmapSubgoal[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,13 +63,21 @@ export default function StudentRoadmapPage() {
       if (roadmapData) {
         setRoadmap(roadmapData as LearningRoadmap);
 
-        const { data: stepsData } = await supabase
-          .from("roadmap_steps")
-          .select("*")
-          .eq("roadmap_id", roadmapData.id)
-          .order("step_order", { ascending: true });
+        const [{ data: stepsData }, { data: subgoalData }] = await Promise.all([
+          supabase
+            .from("roadmap_steps")
+            .select("*")
+            .eq("roadmap_id", roadmapData.id)
+            .order("step_order", { ascending: true }),
+          supabase
+            .from("roadmap_subgoals")
+            .select("*")
+            .eq("roadmap_id", roadmapData.id)
+            .order("sort_order", { ascending: true }),
+        ]);
 
         setSteps((stepsData as RoadmapStep[]) ?? []);
+        setSubgoals((subgoalData as RoadmapSubgoal[]) ?? []);
       }
 
       setLoading(false);
@@ -88,6 +97,7 @@ export default function StudentRoadmapPage() {
   const completedCount = steps.filter((s) => s.status === "completed").length;
   const totalStars = steps.reduce((sum, s) => sum + (s.star_reward ?? 0), 0);
   const progressPct = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+  const subgoalById = new Map(subgoals.map((sg) => [sg.id, sg]));
 
   return (
     <div className="min-h-screen" style={{ background: "#F7F9FC" }}>
@@ -257,8 +267,43 @@ export default function StudentRoadmapPage() {
                 const isActive = step.status === "active";
                 const isLocked = step.status === "locked";
 
+                // Render a milestone header when the subgoal changes.
+                const sg = step.subgoal_id ? subgoalById.get(step.subgoal_id) : undefined;
+                const prevSubgoalId = index > 0 ? steps[index - 1].subgoal_id : undefined;
+                const showHeader = sg && step.subgoal_id !== prevSubgoalId;
+
                 return (
                   <div key={step.id} style={{ position: "relative" }}>
+                    {showHeader && sg && (
+                      <div
+                        className="flex items-start gap-2"
+                        style={{ margin: index === 0 ? "0 0 0.75rem" : "1.25rem 0 0.75rem" }}
+                      >
+                        <Target size={18} color="#7C3AED" style={{ flexShrink: 0, marginTop: "2px" }} aria-hidden="true" />
+                        <div>
+                          <p
+                            style={{
+                              fontFamily: "var(--font-nunito), sans-serif",
+                              fontSize: "1.0625rem",
+                              fontWeight: 800,
+                              color: "#0C2340",
+                            }}
+                          >
+                            {sg.title}
+                          </p>
+                          {sg.target_skill && (
+                            <p style={{ fontSize: "0.8125rem", color: "#7C3AED", fontWeight: 600 }}>
+                              Skill focus: {sg.target_skill}
+                            </p>
+                          )}
+                          {sg.description && (
+                            <p style={{ fontSize: "0.8125rem", color: "#64748B", lineHeight: 1.5 }}>
+                              {sg.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {/* Connector line */}
                     {index < steps.length - 1 && (
                       <div

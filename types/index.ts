@@ -84,6 +84,7 @@ export interface StepActivities {
 export interface RoadmapStep {
   id: string;
   roadmap_id: string;
+  subgoal_id?: string | null;
   step_order: number;
   title: string;
   description: string | null;
@@ -105,6 +106,33 @@ export interface LearningRoadmap {
   approved_at: string | null;
   created_at: string;
   roadmap_steps?: RoadmapStep[];
+}
+
+// ─── Phase 12E: Roadmap subgoals + teacher-only assessments ─────────────────
+
+export interface RoadmapSubgoal {
+  id: string;
+  roadmap_id: string;
+  sort_order: number;
+  title: string;
+  description: string | null;
+  target_skill: string | null;
+  standard_alignment: string | null;
+  status: "active" | "completed";
+  created_at: string;
+}
+
+export interface RoadmapAssessment {
+  id: string;
+  roadmap_id: string;
+  subgoal_id: string | null;
+  curriculum_id: string | null;
+  title: string;
+  curriculum_unit: string | null;
+  standard_alignment: string | null;
+  teacher_notes: string | null;
+  progress_signal: Record<string, unknown> | null;
+  created_at: string;
 }
 
 // ─── Phase 12: AI Lesson Engine ────────────────────────────────────────────
