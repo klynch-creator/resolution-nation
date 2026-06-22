@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Star, Lock, Check, Target } from "lucide-react";
+import { Star, Lock, Check, Target, Sparkles } from "lucide-react";
 import type { Profile, Goal, LearningRoadmap, RoadmapStep, RoadmapSubgoal } from "@/types";
 
 export default function StudentRoadmapPage() {
@@ -20,6 +20,34 @@ export default function StudentRoadmapPage() {
   const [steps, setSteps] = useState<RoadmapStep[]>([]);
   const [subgoals, setSubgoals] = useState<RoadmapSubgoal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [skillLessonLoading, setSkillLessonLoading] = useState<string | null>(null);
+  const [skillError, setSkillError] = useState<string | null>(null);
+
+  async function startSkillLesson(sg: RoadmapSubgoal) {
+    setSkillLessonLoading(sg.id);
+    setSkillError(null);
+    try {
+      const res = await fetch("/api/lessons/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: goal?.subject || "Practice",
+          topic: sg.target_skill || sg.title,
+          goalId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSkillError(json.error ?? "Couldn't start a lesson. Please try again.");
+        setSkillLessonLoading(null);
+        return;
+      }
+      router.push(`/dashboard/student/lessons/${json.lesson.id}`);
+    } catch {
+      setSkillError("Something went wrong. Please try again.");
+      setSkillLessonLoading(null);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -260,6 +288,12 @@ export default function StudentRoadmapPage() {
               </p>
             </div>
 
+            {skillError && (
+              <div className="error-banner" role="alert" style={{ marginBottom: "1rem" }}>
+                {skillError}
+              </div>
+            )}
+
             {/* Steps path */}
             <div className="flex flex-col gap-4">
               {steps.map((step, index) => {
@@ -301,6 +335,26 @@ export default function StudentRoadmapPage() {
                               {sg.description}
                             </p>
                           )}
+                          <button
+                            onClick={() => startSkillLesson(sg)}
+                            disabled={skillLessonLoading !== null}
+                            className="flex items-center gap-1"
+                            style={{
+                              marginTop: "0.5rem",
+                              background: "white",
+                              color: "#7C3AED",
+                              border: "1.5px solid #7C3AED",
+                              borderRadius: "8px",
+                              padding: "0.375rem 0.75rem",
+                              fontSize: "0.8125rem",
+                              fontWeight: 700,
+                              cursor: skillLessonLoading !== null ? "default" : "pointer",
+                              opacity: skillLessonLoading !== null && skillLessonLoading !== sg.id ? 0.5 : 1,
+                            }}
+                          >
+                            <Sparkles size={14} aria-hidden="true" />
+                            {skillLessonLoading === sg.id ? "Building your lesson…" : "Practice this skill"}
+                          </button>
                         </div>
                       </div>
                     )}

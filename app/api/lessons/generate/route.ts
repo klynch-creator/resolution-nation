@@ -189,7 +189,7 @@ Write the lesson now.`;
     let contentKey = "";
     for (let attempt = 0; attempt < 3; attempt++) {
       const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 2500,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: userMessage }],

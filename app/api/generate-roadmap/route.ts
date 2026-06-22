@@ -146,7 +146,7 @@ Priority: ${goal.priority}${curriculumBlock}
 Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus 2-4 teacher-only assessment checkpoints.`;
 
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 8000,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
