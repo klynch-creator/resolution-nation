@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Star, Target, Map, School, Layers, BookOpen, Sparkles } from "lucide-react";
+import { Star, Target, Map, School, Layers, BookOpen, Sparkles, Mic } from "lucide-react";
 import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
 
 export default function StudentDashboard() {
@@ -205,6 +205,7 @@ export default function StudentDashboard() {
             { href: "/dashboard/student", label: "Dashboard", active: true, Icon: null },
             { href: "/dashboard/student/goals", label: "My Goals", active: false, Icon: null },
             { href: "/dashboard/student/lessons", label: "Lessons", active: false, Icon: BookOpen },
+            { href: "/dashboard/student/fluency", label: "Read Aloud", active: false, Icon: Mic },
             { href: "/dashboard/student/store", label: "Store", active: false, Icon: Star },
             { href: "/dashboard/student/collection", label: "Collection", active: false, Icon: Layers },
           ].map((link) => (
@@ -456,6 +457,43 @@ export default function StudentDashboard() {
                 </div>
                 <div style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.875rem" }}>
                   Pick a subject and learn something new — earn stars as you go
+                </div>
+              </div>
+            </div>
+            <Sparkles size={24} color="white" aria-hidden="true" style={{ flexShrink: 0 }} />
+          </div>
+        </Link>
+
+        {/* Read Aloud — full-width spotlight */}
+        <Link href="/dashboard/student/fluency" style={{ textDecoration: "none" }}>
+          <div
+            className="card card-hover mb-6"
+            style={{
+              background: "linear-gradient(135deg, #7C3AED 0%, #9F67FA 100%)",
+              padding: "1.5rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <Mic size={36} color="white" aria-hidden="true" />
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-nunito), sans-serif",
+                    fontWeight: 800,
+                    color: "white",
+                    fontSize: "1.1875rem",
+                    marginBottom: "0.125rem",
+                  }}
+                >
+                  Read Aloud
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.875rem" }}>
+                  Read a passage out loud and get friendly tips to read even better
                 </div>
               </div>
             </div>

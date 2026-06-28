@@ -129,21 +129,38 @@ export default function TeacherStudentLessonsPage() {
                   <span style={{ fontSize: "0.875rem", color: "#64748B" }}>Grade {studentGrade}</span>
                 )}
               </div>
-              <Link
-                href={`/dashboard/teacher/students/${studentId}/analytics`}
-                style={{
-                  background: "#D97706",
-                  color: "white",
-                  borderRadius: "8px",
-                  padding: "0.4375rem 0.875rem",
-                  fontSize: "0.8125rem",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                📊 View Analytics
-              </Link>
+              <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
+                <Link
+                  href={`/dashboard/teacher/students/${studentId}/fluency`}
+                  style={{
+                    background: "#7C3AED",
+                    color: "white",
+                    borderRadius: "8px",
+                    padding: "0.4375rem 0.875rem",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  🎙️ Fluency
+                </Link>
+                <Link
+                  href={`/dashboard/teacher/students/${studentId}/analytics`}
+                  style={{
+                    background: "#D97706",
+                    color: "white",
+                    borderRadius: "8px",
+                    padding: "0.4375rem 0.875rem",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  📊 View Analytics
+                </Link>
+              </div>
             </div>
 
             <LessonHistory lessons={lessons} skillTiers={skillTiers} />

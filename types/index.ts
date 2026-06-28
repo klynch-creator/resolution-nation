@@ -217,6 +217,75 @@ export interface Curriculum {
   created_at: string;
 }
 
+// ─── Phase 13: Read-Aloud Fluency ──────────────────────────────────────────
+
+export type FluencyLevel = "below" | "approaching" | "on";
+export type FluencyStatus = "active" | "completed";
+
+export interface FluencyMiscue {
+  type: "substitution" | "omission" | "insertion";
+  expected?: string;
+  heard?: string;
+  refIndex: number;
+}
+
+export interface FluencyAssessment {
+  id: string;
+  student_id: string;
+  source: "library" | "roadmap";
+  goal_id: string | null;
+  subject: string;
+  grade: string | null;
+  passage_title: string;
+  passage_text: string;
+  passage_word_count: number;
+  standard_alignment: string | null;
+  content_key: string;
+  status: FluencyStatus;
+  best_wcpm: number | null;
+  best_level: FluencyLevel | null;
+  attempts: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface FluencyAttempt {
+  id: string;
+  assessment_id: string;
+  student_id: string;
+  attempt_number: number;
+  audio_path: string | null;
+  transcript: string | null;
+  duration_seconds: number | null;
+  words_correct: number;
+  words_read: number;
+  substitutions: number;
+  omissions: number;
+  insertions: number;
+  errors: number;
+  wcpm: number;
+  accuracy_pct: number | null;
+  completion_pct: number | null;
+  level: FluencyLevel | null;
+  norm_p25: number | null;
+  norm_p50: number | null;
+  norm_season: string | null;
+  norm_source: string | null;
+  miscues: FluencyMiscue[] | null;
+  feedback: string | null;
+  stars_awarded: number;
+  created_at: string;
+}
+
+/** Student-safe response from /api/fluency/score (no score/level exposed). */
+export interface FluencyScoreResponse {
+  attempt_number: number;
+  feedback: string;
+  focus_words: string[];
+  stars_awarded: number;
+  can_retry: boolean;
+}
+
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type ItemType = "card" | "skin" | "gift";
 

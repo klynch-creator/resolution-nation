@@ -34,6 +34,7 @@ We collect the minimum information necessary to provide the Service. The categor
 - Goals you or your teacher set
 - Learning roadmaps and steps generated for you
 - Responses to in-product workouts (correctness, difficulty, response time)
+- Voice recordings you make when you use the Read Aloud (reading fluency) feature, together with the text transcript and the reading metrics derived from them (such as words-correct-per-minute and accuracy). These recordings are made only when a student deliberately starts a reading and are used to measure and support reading progress. See Section 3 and Section 6 for how they are used and retained.
 - Star balance and inventory items
 - Files uploaded by your teacher (report cards, assessment results) that the teacher chooses to associate with your account
 
@@ -50,7 +51,9 @@ We collect the minimum information necessary to provide the Service. The categor
 
 ### e. Information we do NOT collect
 
-We do not collect: precise geolocation, advertising identifiers, device contacts, microphone or camera audio (the camera is used only when you explicitly take an avatar photo), biometric identifiers, behavioral profiles, or browsing history outside our Service. We do not use third-party advertising or analytics SDKs in our mobile or web applications.
+We do not collect: precise geolocation, advertising identifiers, device contacts, behavioral profiles, or browsing history outside our Service. We do not use third-party advertising or analytics SDKs in our mobile or web applications.
+
+We capture microphone audio only when a student deliberately starts a reading in the Read Aloud (reading fluency) feature; we never listen in the background or record without an explicit, student-initiated action. The camera is used only when you explicitly take an avatar photo. We do **not** create voiceprints or any biometric identifier from Read Aloud recordings: the audio is used to transcribe the words read and measure reading rate and accuracy, not to identify a person by their voice.
 
 ## 3. How we use information
 
@@ -58,6 +61,7 @@ We use information only for the following purposes:
 
 - Operating the Service (showing you your goals, recording your progress, awarding stars, enabling parent and teacher views, processing in-product invite codes).
 - Generating AI-assisted learning goal suggestions when initiated by a teacher. Personally identifiable information is stripped before any data leaves our infrastructure for this purpose (see Section 5 — Sub-processors).
+- Measuring and supporting reading fluency. When a student uses the Read Aloud feature, the voice recording is sent to a speech-to-text sub-processor (under a data-processing agreement that prohibits using the audio to train its models) to produce a transcript; we then calculate reading metrics and generate supportive feedback for the student. The resulting scores and levels are shown only to the student's teacher and linked parent — not to the student. The audio file itself is stored privately so a teacher or parent can listen back.
 - Communicating with you about your account (password resets, security alerts, service announcements relating to your account).
 - Security, fraud prevention, and compliance — including responding to lawful requests and enforcing our Terms of Service.
 - Improving the Service in aggregate. We do not use student educational records for product improvement except in fully de-identified, aggregated form.
@@ -92,6 +96,7 @@ We rely on a limited set of vendors to operate the Service. Each is contractuall
 We retain personal information only as long as needed for the purposes described in this Policy, or as required by our contracts with schools, or as required by law.
 
 - Student educational records are retained for the duration of the school's contract with us, plus 30 days for transition, unless the school directs earlier deletion.
+- Read Aloud voice recordings are stored in a private, access-controlled location and retained as part of the student's educational record (subject to the same contract and deletion rules above); a school or parent may request deletion of individual recordings at any time. Transcripts and reading metrics are retained with the educational record.
 - Audit log entries are retained for two years.
 - Server logs are retained for 30 days.
 - Account deletion requests trigger soft-deletion immediately and hard-deletion 30 days later. After hard-deletion, backups age out per our retention schedule (currently 30 days of point-in-time recovery on our primary database).
@@ -145,3 +150,4 @@ privacy@resolutionnation.app
 4. Add jurisdiction-of-disputes / governing law clauses if not handled in ToS.
 5. Verify CCPA "Notice at Collection" requirements are satisfied if California schools are in scope at launch.
 6. Decide whether to add a California-specific section or rely on the general statement.
+7. **Read Aloud / voice recordings (new):** add the speech-to-text vendor to /legal/subprocessors with a signed DPA that prohibits training on customer audio and, ideally, provides a zero-retention option. Confirm the "no voiceprint / not a biometric identifier" characterization is acceptable for Illinois BIPA, Texas CUBI, and Washington biometric laws, and confirm whether any state requires separate written consent for capturing a minor's voice recording even where school FERPA consent covers educational records. Update the NY Parent Bill of Rights data-elements inventory to include voice recordings, transcripts, and reading metrics. Confirm Read Aloud audio is covered by the account-deletion worker (soft + hard delete of storage objects), and verify retention/deletion of audio files matches §6.

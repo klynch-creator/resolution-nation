@@ -560,6 +560,21 @@ function StudentsContent() {
                     📚 Lessons
                   </Link>
                   <Link
+                    href={`/dashboard/teacher/students/${row.profile.id}/fluency`}
+                    style={{
+                      background: "#7C3AED",
+                      color: "white",
+                      borderRadius: "8px",
+                      padding: "0.4375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    🎙️ Fluency
+                  </Link>
+                  <Link
                     href={`/dashboard/teacher/students/${row.profile.id}/upload`}
                     style={{
                       background: "white",

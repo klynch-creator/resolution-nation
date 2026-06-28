@@ -1,5 +1,32 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Recursively collect every object path under `${prefix}` in a bucket.
+ * Supabase storage has no recursive delete, so we walk the folder tree.
+ * Bounded by depth/entries to stay safe on a cron run.
+ */
+async function listAllPaths(
+  admin: SupabaseClient,
+  bucket: string,
+  prefix: string,
+  depth = 0
+): Promise<string[]> {
+  if (depth > 6) return [];
+  const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
+  if (error || !data) return [];
+  const paths: string[] = [];
+  for (const entry of data) {
+    const full = `${prefix}/${entry.name}`;
+    // Folders come back with a null id; files have an id + metadata.
+    if (entry.id === null) {
+      paths.push(...(await listAllPaths(admin, bucket, full, depth + 1)));
+    } else {
+      paths.push(full);
+    }
+  }
+  return paths;
+}
 
 /**
  * Nightly hard-delete worker.
@@ -77,8 +104,28 @@ export async function GET(request: Request) {
     error?: string;
   }> = [];
 
+  // Private buckets whose objects are stored under a `${userId}/...` prefix.
+  // DB rows cascade via ON DELETE CASCADE, but storage objects do not, so we
+  // purge them explicitly before deleting the auth user.
+  const USER_PREFIXED_BUCKETS = ["fluency-audio", "report-cards", "curricula"];
+
+  async function purgeUserStorage(userId: string): Promise<void> {
+    for (const bucket of USER_PREFIXED_BUCKETS) {
+      try {
+        const paths = await listAllPaths(admin, bucket, userId);
+        // Remove in batches to keep requests bounded.
+        for (let i = 0; i < paths.length; i += 100) {
+          await admin.storage.from(bucket).remove(paths.slice(i, i + 100));
+        }
+      } catch {
+        // Best-effort: never block account deletion on storage cleanup.
+      }
+    }
+  }
+
   for (const row of due ?? []) {
     try {
+      await purgeUserStorage(row.user_id);
       const { error: delErr } = await admin.auth.admin.deleteUser(row.user_id);
 
       if (delErr) {
