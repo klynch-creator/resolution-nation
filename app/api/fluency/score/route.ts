@@ -19,15 +19,29 @@ function extFor(mime: string): string {
   return "webm";
 }
 
-const FEEDBACK_SYSTEM = `You are a warm, encouraging K-12 reading coach speaking directly to a young student about how they just read a passage aloud.
+const FEEDBACK_SYSTEM = `You are a real K-12 reading teacher leaving a short, personal note for a student about the passage they just read aloud. It should read like a human teacher who actually listened — not a chatbot.
 
-Write 2-3 short sentences of supportive, specific feedback.
-Rules:
-- Be kind and motivating first. Celebrate effort.
-- Give ONE concrete, doable tip (e.g. "read in small phrases", "slow down on longer words", "take a breath at each period").
-- If specific tricky words are provided, gently encourage practicing them by name.
-- Do NOT mention any numbers, scores, words-per-minute, percentages, grade level, or whether they are "below/approaching/on" level.
-- Speak to the student ("you"), simple language, no headings. Return plain text only.`;
+Write 2 to 3 sentences.
+Do:
+- Be specific to THIS read. When given words the student missed, name a couple of them directly (e.g. "the word 'thought' tripped you up").
+- Point out ONE concrete thing to work on, tied to what actually happened — for example a sound or pattern in the words they missed, slowing down on longer words, reading in phrases instead of word-by-word, or watching for words that got skipped.
+- If it is their second read, say something true about what changed since the first read (faster, smoother, fewer skips, etc.).
+- Sound warm and matter-of-fact, like a quick handwritten comment.
+
+Do NOT:
+- Do NOT open with "Great job", "Amazing", "Awesome", "Well done", or similar generic praise. Vary how you start.
+- Do NOT use em dashes, and do not put an exclamation point on every sentence.
+- Do NOT use buzzwords or coach-speak ("keep crushing it", "you've got this", "level up").
+- Do NOT state a grade level, a percentile, words-per-minute, or percentages, and do not say "below/approaching/on grade level". The student sees those numbers separately.
+
+Return plain text only, no headings or quotes around the whole thing.`;
+
+function rateDescriptor(level: string | null): string {
+  if (level === "on") return "at or above the grade-level reading rate";
+  if (level === "approaching") return "a bit slower than the grade-level reading rate";
+  if (level === "below") return "well below the grade-level reading rate";
+  return "not compared to a grade norm";
+}
 
 export async function POST(request: Request) {
   const rl = checkRateLimit(request, {
@@ -120,24 +134,61 @@ export async function POST(request: Request) {
       )
     ).slice(0, 3);
 
-    // 6) Supportive, level-free feedback (best-effort; never blocks scoring).
+    // Prior read (for read 2 improvement, shown to student + used in feedback).
+    let prevWcpm: number | null = null;
+    if (attemptNumber > 1) {
+      const { data: priorAttempts } = await supabase
+        .from("fluency_attempts")
+        .select("wcpm, attempt_number")
+        .eq("assessment_id", assessmentId)
+        .lt("attempt_number", attemptNumber)
+        .order("attempt_number", { ascending: true });
+      if (priorAttempts && priorAttempts.length > 0) {
+        prevWcpm = priorAttempts[0].wcpm; // first read
+      }
+    }
+
+    // Concrete miscue detail for the feedback model (not shown raw to student).
+    const subs = score.miscues
+      .filter((m) => m.type === "substitution")
+      .slice(0, 5)
+      .map((m) => `said "${m.heard}" for "${m.expected}"`);
+    const skips = score.miscues
+      .filter((m) => m.type === "omission")
+      .slice(0, 5)
+      .map((m) => `skipped "${m.expected}"`);
+    const miscueDetail =
+      [...subs, ...skips].join("; ") || "no notable word errors";
+
+    let improvementNote = "";
+    if (attemptNumber > 1 && prevWcpm != null) {
+      const faster = score.wcpm - prevWcpm;
+      improvementNote = `This is the second read. First read rate was ${prevWcpm} WPM, this read ${score.wcpm} WPM (${
+        faster > 0 ? `${faster} faster` : faster < 0 ? `${-faster} slower` : "same pace"
+      }).`;
+    }
+
+    // 6) Specific, human feedback (best-effort; never blocks scoring).
     let feedback =
       attemptNumber > 1
-        ? "Nice work reading that again! Keep practicing the tricky words and reading in smooth little phrases."
-        : "Great job reading out loud! Try reading in smooth little phrases and taking a breath at each period.";
+        ? "On this second read you kept going even on the harder parts. Pick two of the tricky words above and read the sentence they're in a few times, so they start to feel automatic."
+        : "You made it through the whole passage. Try reading it again in small phrases instead of one word at a time, and slow down a touch on the longer words.";
     try {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 220,
+        max_tokens: 240,
         system: FEEDBACK_SYSTEM,
         messages: [
           {
             role: "user",
-            content: `This is read ${attemptNumber} of the passage "${assessment.passage_title}".
-Accuracy was ${score.accuracyPct}% and they read about ${score.completionPct}% of the passage.
-Tricky words to practice (may be empty): ${focusWords.join(", ") || "none in particular"}.
-Write the encouraging feedback now.`,
+            content: `Student grade: ${assessment.grade ?? "unknown"}.
+Passage: "${assessment.passage_title}".
+This is read number ${attemptNumber}.
+They read ${rateDescriptor(norm.level)}, with ${score.accuracyPct}% accuracy, and got through about ${score.completionPct}% of the passage.
+Word errors this read: ${miscueDetail}.
+${improvementNote}
+Write the note now.`,
           },
         ],
       });
@@ -194,7 +245,8 @@ Write the encouraging feedback now.`,
 
     const stars = (rpcResult as { stars_awarded?: number } | null)?.stars_awarded ?? 0;
 
-    // Student-safe payload only: NO wcpm / accuracy / level.
+    // Student now sees their reading rate and goal so they know where they stand
+    // and what to aim for. (Teacher/parent get the full clinical view elsewhere.)
     return NextResponse.json({
       result: {
         attempt_number: attemptNumber,
@@ -202,6 +254,12 @@ Write the encouraging feedback now.`,
         focus_words: focusWords,
         stars_awarded: stars,
         can_retry: attemptNumber < 2,
+        wcpm: score.wcpm,
+        accuracy_pct: score.accuracyPct,
+        completion_pct: score.completionPct,
+        level: norm.level,
+        target_wcpm: norm.p50,
+        prev_wcpm: prevWcpm,
       },
     });
   } catch (err) {

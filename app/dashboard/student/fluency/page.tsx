@@ -461,6 +461,87 @@ export default function FluencyPage() {
               </div>
             )}
 
+            {/* Reading rate + goal */}
+            <div
+              style={{
+                background: "#F7F9FC",
+                border: "1px solid #E2E8F0",
+                borderRadius: "12px",
+                padding: "1rem 1.25rem",
+                marginBottom: "1rem",
+              }}
+            >
+              <div className="flex items-end gap-2" style={{ marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "2.5rem", fontWeight: 800, color: "#0C2340", lineHeight: 1 }}>
+                  {result.wcpm}
+                </span>
+                <span style={{ fontSize: "1rem", color: "#64748B", fontWeight: 600, marginBottom: "0.25rem" }}>
+                  words per minute
+                </span>
+              </div>
+
+              {result.prev_wcpm != null && (
+                <div
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: 700,
+                    color: result.wcpm - result.prev_wcpm >= 0 ? "#047857" : "#B45309",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  {result.wcpm - result.prev_wcpm >= 0
+                    ? `+${result.wcpm - result.prev_wcpm} faster than your first read`
+                    : `${result.wcpm - result.prev_wcpm} from your first read`}
+                </div>
+              )}
+
+              {result.target_wcpm != null ? (
+                <>
+                  <div
+                    style={{
+                      position: "relative",
+                      height: "12px",
+                      background: "#E2E8F0",
+                      borderRadius: "100px",
+                      overflow: "hidden",
+                      marginBottom: "0.375rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.round((result.wcpm / result.target_wcpm) * 100))}%`,
+                        height: "100%",
+                        background:
+                          result.level === "on"
+                            ? "linear-gradient(90deg,#02C39A,#047857)"
+                            : result.level === "approaching"
+                              ? "linear-gradient(90deg,#F59E0B,#D97706)"
+                              : "linear-gradient(90deg,#60A5FA,#2563EB)",
+                        borderRadius: "100px",
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: "0.875rem", color: "#475569", fontWeight: 600 }}>
+                    {result.wcpm >= result.target_wcpm
+                      ? `You reached your grade-level goal of ${result.target_wcpm} WPM! 🎯`
+                      : `Grade-level goal: ${result.target_wcpm} WPM — ${
+                          result.target_wcpm - result.wcpm
+                        } to go. You'll get there with practice.`}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: "0.875rem", color: "#475569", fontWeight: 600 }}>
+                  Keep practicing your reading every day!
+                </div>
+              )}
+
+              {result.accuracy_pct != null && (
+                <div style={{ fontSize: "0.8125rem", color: "#94A3B8", marginTop: "0.5rem" }}>
+                  You read {result.accuracy_pct}% of the words correctly.
+                </div>
+              )}
+            </div>
+
             <p style={{ fontSize: "1.0625rem", lineHeight: 1.6, color: "#1E293B" }}>
               {result.feedback}
             </p>

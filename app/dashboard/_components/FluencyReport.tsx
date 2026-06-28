@@ -53,6 +53,88 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FluencySummary({ series }: { series: FluencyAttempt[] }) {
+  if (series.length === 0) return null;
+
+  const latest = series[series.length - 1];
+  const first = series[0];
+  const bestWcpm = Math.max(...series.map((s) => s.wcpm));
+  const accVals = series.map((s) => s.accuracy_pct).filter((v): v is number => v != null);
+  const avgAcc =
+    accVals.length > 0 ? Math.round((accVals.reduce((a, b) => a + b, 0) / accVals.length) * 10) / 10 : null;
+  const trend = series.length > 1 ? latest.wcpm - first.wcpm : null;
+  const target = latest.norm_p50 ?? null;
+
+  // Inline SVG line chart of WCPM over time.
+  const W = 320;
+  const H = 110;
+  const padL = 28;
+  const padR = 10;
+  const padT = 12;
+  const padB = 18;
+  const maxY = Math.max(target ?? 0, ...series.map((s) => s.wcpm), 10) * 1.1;
+  const n = series.length;
+  const x = (i: number) => padL + (n === 1 ? (W - padL - padR) / 2 : (i * (W - padL - padR)) / (n - 1));
+  const y = (v: number) => padT + (H - padT - padB) * (1 - v / maxY);
+  const linePath = series.map((s, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(s.wcpm)}`).join(" ");
+
+  return (
+    <div className="card">
+      <h2
+        style={{
+          fontFamily: "Georgia, serif",
+          fontSize: "1.0625rem",
+          fontWeight: 700,
+          color: "#0C2340",
+          marginBottom: "0.75rem",
+        }}
+      >
+        Progress over time
+      </h2>
+
+      <div className="flex flex-wrap gap-4" style={{ marginBottom: "0.5rem" }}>
+        <Metric label="Latest WCPM" value={String(latest.wcpm)} />
+        <Metric label="Best WCPM" value={String(bestWcpm)} />
+        <Metric label="Avg accuracy" value={avgAcc != null ? `${avgAcc}%` : "—"} />
+        <Metric label="Reads" value={String(series.length)} />
+        <Metric
+          label="Trend"
+          value={trend == null ? "—" : trend > 0 ? `+${trend}` : String(trend)}
+        />
+        <div style={{ display: "flex", alignItems: "center" }}>{levelBadge(latest.level)}</div>
+      </div>
+
+      {series.length >= 2 && (
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="WCPM over time" style={{ maxWidth: "420px" }}>
+          {/* grade-level target line */}
+          {target != null && target <= maxY && (
+            <>
+              <line
+                x1={padL}
+                y1={y(target)}
+                x2={W - padR}
+                y2={y(target)}
+                stroke="#94A3B8"
+                strokeDasharray="4 3"
+                strokeWidth={1}
+              />
+              <text x={padL} y={y(target) - 3} fontSize="8" fill="#94A3B8">
+                goal {target}
+              </text>
+            </>
+          )}
+          <path d={linePath} fill="none" stroke="#028090" strokeWidth={2} />
+          {series.map((s, i) => (
+            <circle key={s.id} cx={x(i)} cy={y(s.wcpm)} r={3} fill="#028090" />
+          ))}
+          <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="#E2E8F0" strokeWidth={1} />
+          <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#E2E8F0" strokeWidth={1} />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 export default function FluencyReport({
   assessments,
   attempts,
@@ -98,6 +180,11 @@ export default function FluencyReport({
     byAssessment.set(a.assessment_id, list);
   }
 
+  // Chronological series for the trend (oldest -> newest).
+  const series = [...attempts].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
   return (
     <div className="flex flex-col gap-4">
       {audioError && (
@@ -105,6 +192,8 @@ export default function FluencyReport({
           {audioError}
         </div>
       )}
+
+      <FluencySummary series={series} />
 
       {assessments.map((asmt) => {
         const reads = (byAssessment.get(asmt.id) ?? []).sort(

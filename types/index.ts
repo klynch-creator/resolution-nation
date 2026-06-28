@@ -277,13 +277,21 @@ export interface FluencyAttempt {
   created_at: string;
 }
 
-/** Student-safe response from /api/fluency/score (no score/level exposed). */
+/** Response from /api/fluency/score shown to the student after a read. */
 export interface FluencyScoreResponse {
   attempt_number: number;
   feedback: string;
   focus_words: string[];
   stars_awarded: number;
   can_retry: boolean;
+  wcpm: number;
+  accuracy_pct: number | null;
+  completion_pct: number | null;
+  level: FluencyLevel | null;
+  /** grade-level target (50th percentile WCPM), null when not normed */
+  target_wcpm: number | null;
+  /** first-read WCPM, present on a second read */
+  prev_wcpm: number | null;
 }
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
