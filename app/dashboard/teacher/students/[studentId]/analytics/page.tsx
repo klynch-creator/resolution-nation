@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import FluencyAnalyticsCard from "@/app/dashboard/_components/FluencyAnalyticsCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -537,6 +538,9 @@ export default function StudentAnalyticsPage() {
                 color={levelColor}
               />
             </div>
+
+            {/* Reading fluency (read-aloud) summary + link to full report */}
+            <FluencyAnalyticsCard studentId={studentId} />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
               {/* Literacy Skills */}
