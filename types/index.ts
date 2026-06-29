@@ -77,8 +77,15 @@ export interface RoadmapQuestion {
   hint: string;
 }
 
+export interface LessonPassage {
+  title: string;
+  text: string;
+}
+
 export interface StepActivities {
   questions: RoadmapQuestion[];
+  /** Optional grade-level reading passage (non-math lessons). */
+  passage?: LessonPassage | null;
 }
 
 export interface RoadmapStep {
@@ -294,7 +301,7 @@ export interface FluencyScoreResponse {
   prev_wcpm: number | null;
 }
 
-export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary" | "mythic";
 export type ItemType = "card" | "skin" | "gift";
 
 export interface StarStoreItem {

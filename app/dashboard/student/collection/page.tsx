@@ -10,6 +10,7 @@ import { Star, Layers, Gift, Check } from "lucide-react";
 import type { Profile, StarStoreItem, UserInventory, Rarity } from "@/types";
 
 const RARITY_COLOR: Record<Rarity, string> = {
+  mythic: "#DB2777",
   common: "#6B7280",
   uncommon: "#059669",
   rare: "#2563EB",
@@ -18,6 +19,7 @@ const RARITY_COLOR: Record<Rarity, string> = {
 };
 
 const RARITY_BG: Record<Rarity, string> = {
+  mythic: "#FDF2F8",
   common: "#F3F4F6",
   uncommon: "#ECFDF5",
   rare: "#EFF6FF",
@@ -25,7 +27,7 @@ const RARITY_BG: Record<Rarity, string> = {
   legendary: "#FFFBEB",
 };
 
-const RARITY_ORDER: Rarity[] = ["legendary", "epic", "rare", "uncommon", "common"];
+const RARITY_ORDER: Rarity[] = ["mythic", "legendary", "epic", "rare", "uncommon", "common"];
 
 type InventoryWithItem = UserInventory & { star_store_items: StarStoreItem };
 
@@ -216,6 +218,7 @@ export default function CollectionPage() {
 
   // Group by rarity
   const grouped: Record<Rarity, InventoryWithItem[]> = {
+    mythic: [],
     legendary: [],
     epic: [],
     rare: [],

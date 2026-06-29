@@ -15,14 +15,46 @@ const TIER_GUIDANCE: Record<LessonTier, string> = {
     "Above grade level — a stretch/challenge. Introduce harder vocabulary and multi-step reasoning.",
 };
 
-const SYSTEM_PROMPT = `You are an expert K-12 teacher writing a single short, engaging lesson for one student.
+// Stronger students get longer lessons (capped at 20). Distribution feeds the
+// adaptive player, which needs questions in each difficulty bucket.
+const QUESTION_PLAN: Record<LessonTier, { total: number; easy: number; medium: number; hard: number }> = {
+  below: { total: 6, easy: 2, medium: 2, hard: 2 },
+  at: { total: 10, easy: 3, medium: 4, hard: 3 },
+  above: { total: 16, easy: 4, medium: 6, hard: 6 },
+};
+
+function isMathSubject(subject: string): boolean {
+  return /\bmath/i.test(subject);
+}
+
+/** Pull the JSON object out of a model response, tolerating fences/prose. */
+function extractJson(text: string): string {
+  let t = text.trim();
+  t = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const first = t.indexOf("{");
+  const last = t.lastIndexOf("}");
+  if (first !== -1 && last !== -1 && last > first) return t.slice(first, last + 1);
+  return t;
+}
+
+function buildSystemPrompt(plan: { total: number; easy: number; medium: number; hard: number }, math: boolean): string {
+  const passageBlock = math
+    ? ""
+    : `  "passage": { "title": "string", "text": "string (the reading passage)" },
+`;
+  const passageRules = math
+    ? `- This is MATH: no reading passage. Use clear, self-contained word problems and computation questions. Set "passage" to null.`
+    : `- Include a "passage": an original, grade-level reading passage (about 200–400 words, scaled to the grade) written in the style of a state standardized test (e.g. NYSTP / state ELA & content-area tests): informational or literary, with a clear main idea, structure, and grade-appropriate academic vocabulary.
+- MOST questions must require reading the passage to answer (main idea, key details, inference, vocabulary-in-context, author's purpose, text structure) — mirroring real state-test items. Quote or reference the passage where natural.`;
+
+  return `You are an expert K-12 teacher and assessment writer creating a single rigorous, engaging lesson for one student. Your questions should mirror the rigor and style of state standardized tests — not easy trivia.
 
 Return ONLY valid JSON in exactly this format, no other text:
 {
   "title": "string (short, friendly lesson title)",
   "topic": "string (the specific topic/skill, 2-5 words)",
   "standard_alignment": "string (e.g. RI.3.2) or null",
-  "questions": [
+${passageBlock}  "questions": [
     {
       "difficulty": "easy|medium|hard",
       "question": "string",
@@ -34,18 +66,89 @@ Return ONLY valid JSON in exactly this format, no other text:
 }
 
 Rules:
-- Exactly 6 questions: 2 easy, 2 medium, 2 hard.
-- Multiple choice, exactly 4 options each.
-- correct_index is 0-based (0=A, 1=B, 2=C, 3=D).
+- Exactly ${plan.total} questions: ${plan.easy} easy, ${plan.medium} medium, ${plan.hard} hard.
+- Multiple choice, exactly 4 options each. Exactly ONE option is correct; the other three are plausible distractors (common misconceptions), not obviously wrong.
+- correct_index is 0-based (0=A, 1=B, 2=C, 3=D) and MUST point to the genuinely correct option. Double-check every answer, especially math computations.
+- Questions should be challenging and test-like — favor reasoning, multi-step problems, and inference over recall.
+${passageRules}
 - Age-appropriate and safe for K-12. No violence, adult themes, or sensitive content.
 - Make it specific and interesting, not generic.
 - Do NOT reproduce any of the topics listed as already-completed.`;
+}
 
 interface GeneratedLesson {
   title: string;
   topic: string;
   standard_alignment: string | null;
+  passage?: { title: string; text: string } | null;
   questions: RoadmapQuestion[];
+}
+
+/**
+ * Independent answer-key check. Re-solves each question with a fresh model pass
+ * and corrects a wrong correct_index or drops a broken (ambiguous / no-correct
+ * / multiple-correct) question, so students never see a question that would
+ * teach the wrong thing. Runs for ALL subjects. Returns the cleaned questions
+ * (falls back to the originals if the check itself fails).
+ */
+async function verifyQuestions(
+  anthropic: Anthropic,
+  subject: string,
+  grade: string,
+  passage: { title: string; text: string } | null,
+  questions: RoadmapQuestion[]
+): Promise<RoadmapQuestion[]> {
+  const checkerSystem = `You are a meticulous answer-key checker for K-12 assessment items. For each question you INDEPENDENTLY work out the correct answer (do the math, read the passage), then judge the provided answer key.
+
+Return ONLY JSON: { "results": [ { "index": number, "verdict": "ok" | "fix" | "drop", "correct_index": number, "reason": "string" } ] }
+- "ok": exactly one option is correct and it matches the given correct_index.
+- "fix": exactly one option is correct but the given correct_index is wrong — put the right 0-based index in correct_index.
+- "drop": the item is broken (no correct option, more than one correct option, or ambiguous/unanswerable).
+Be strict about math: actually compute the result.`;
+
+  const payload = {
+    subject,
+    grade,
+    passage: passage ?? undefined,
+    questions: questions.map((q, i) => ({
+      index: i,
+      difficulty: q.difficulty,
+      question: q.question,
+      options: q.options,
+      given_correct_index: q.correct_index,
+    })),
+  };
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4000,
+      system: checkerSystem,
+      messages: [{ role: "user", content: `Check these items:\n${JSON.stringify(payload)}` }],
+    });
+    const c = msg.content[0];
+    if (c.type !== "text") return questions;
+    const parsed = JSON.parse(extractJson(c.text)) as {
+      results?: { index: number; verdict: string; correct_index?: number }[];
+    };
+    const results = parsed.results ?? [];
+    const byIndex = new Map(results.map((r) => [r.index, r]));
+
+    const cleaned: RoadmapQuestion[] = [];
+    questions.forEach((q, i) => {
+      const r = byIndex.get(i);
+      if (!r || r.verdict === "ok") {
+        cleaned.push(q);
+      } else if (r.verdict === "fix" && typeof r.correct_index === "number" && r.correct_index >= 0 && r.correct_index < q.options.length) {
+        cleaned.push({ ...q, correct_index: r.correct_index });
+      }
+      // "drop" (or malformed fix) → omit the question entirely.
+    });
+    return cleaned.length > 0 ? cleaned : questions;
+  } catch {
+    // If verification fails, don't block the lesson — return originals.
+    return questions;
+  }
 }
 
 function computeContentKey(
@@ -175,6 +278,10 @@ export async function POST(request: Request) {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+    const math = isMathSubject(subject);
+    const plan = QUESTION_PLAN[tier];
+    const systemPrompt = buildSystemPrompt(plan, math);
+
     const userMessage = `Subject: ${subject}
 Grade level: ${grade}
 Difficulty tier: ${tier} — ${TIER_GUIDANCE[tier]}
@@ -182,35 +289,47 @@ ${requestedTopic ? `Requested topic: ${requestedTopic}` : "Topic: you choose a f
 ${goalText ? `This lesson should help the student toward their goal: "${goalText}"${goalStandard ? ` (standard ${goalStandard})` : ""}.` : ""}
 Already-completed topics (do NOT repeat any of these): ${priorTopics.length ? priorTopics.join("; ") : "none yet"}
 
-Write the lesson now.`;
+Write a ${plan.total}-question lesson now${math ? "" : ", including the reading passage"}. Make it as rigorous as a real state test for this grade.`;
 
     // Generate, with a couple of retries if we hit a content_key collision.
     let generated: GeneratedLesson | null = null;
+    let verifiedQuestions: RoadmapQuestion[] = [];
     let contentKey = "";
     for (let attempt = 0; attempt < 3; attempt++) {
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 2500,
-        system: SYSTEM_PROMPT,
+        max_tokens: 12000,
+        system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       });
+      if (message.stop_reason === "max_tokens") continue; // truncated — retry
       const content = message.content[0];
       if (content.type !== "text") continue;
       try {
-        const cleaned = content.text
-          .replace(/^```(?:json)?\n?/m, "")
-          .replace(/\n?```$/m, "")
-          .trim();
-        const parsed = JSON.parse(cleaned) as GeneratedLesson;
+        const parsed = JSON.parse(extractJson(content.text)) as GeneratedLesson;
         if (!parsed.questions || parsed.questions.length === 0) continue;
+
+        // Independent answer-key check — fix wrong keys, drop broken items.
+        const passage = math ? null : parsed.passage ?? null;
+        const cleanedQuestions = await verifyQuestions(
+          anthropic,
+          subject,
+          grade,
+          passage,
+          parsed.questions
+        );
+        // Need a usable spread for the adaptive player.
+        if (cleanedQuestions.length < 4) continue;
+
         const key = computeContentKey(
           subject,
           parsed.topic ?? requestedTopic ?? subject,
           tier,
-          parsed.questions
+          cleanedQuestions
         );
         if (priorKeys.has(key)) continue; // duplicate — try again
         generated = parsed;
+        verifiedQuestions = cleanedQuestions;
         contentKey = key;
         break;
       } catch {
@@ -227,6 +346,7 @@ Write the lesson now.`;
 
     const topic = generated.topic ?? requestedTopic ?? subject;
     const starReward = tier === "below" ? 5 : tier === "above" ? 15 : 10;
+    const passageOut = math ? null : generated.passage ?? null;
 
     const { data: lesson, error: insertError } = await supabase
       .from("lessons")
@@ -240,7 +360,7 @@ Write the lesson now.`;
         title: generated.title ?? topic,
         tier,
         standard_alignment: generated.standard_alignment ?? null,
-        activities: { questions: generated.questions },
+        activities: { questions: verifiedQuestions, passage: passageOut },
         star_reward: starReward,
         content_key: contentKey,
         status: "active",

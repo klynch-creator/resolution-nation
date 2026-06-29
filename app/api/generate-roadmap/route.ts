@@ -5,7 +5,23 @@ import type { CurriculumExtract, RoadmapQuestion } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const SYSTEM_PROMPT = `You are an expert K-12 curriculum designer creating a personalized learning roadmap for one student.
+function isMathSubject(subject: string | null): boolean {
+  return !!subject && /\bmath/i.test(subject);
+}
+
+function buildSystemPrompt(math: boolean): string {
+  // Non-math subgoals carry a grade-level, state-test-style reading passage
+  // shared by that subgoal's steps; the player shows it above the questions.
+  const passageField = math
+    ? ""
+    : `      "passage": { "title": "string", "text": "string (the reading passage for this subgoal's steps)" },
+`;
+  const passageRules = math
+    ? `- This is MATH: do NOT include passages. Use clear, self-contained word problems and computation. Omit the "passage" field (or set it to null).`
+    : `- Each subgoal includes a "passage": an original, grade-level reading passage (~200–350 words, scaled to the grade) written in the style of a state standardized test (e.g. NYSTP / state ELA & content tests) — informational or literary, with a clear main idea, structure, and grade-appropriate academic vocabulary. ALL steps in that subgoal draw their questions from this shared passage.
+- MOST questions must require reading the passage (main idea, key details, inference, vocabulary-in-context, author's purpose, text structure), mirroring real state-test items.`;
+
+  return `You are an expert K-12 curriculum designer creating a personalized learning roadmap for one student.
 
 A roadmap is organized into SUBGOALS (milestones that build toward the main goal). Each subgoal targets a specific skill and contains 2-3 scaffolded steps the student works through. You also produce teacher-only ASSESSMENT checkpoints aligned to the school's curriculum — these are for the teacher to gauge progress and are never shown to students or parents.
 
@@ -17,7 +33,7 @@ Return ONLY valid JSON in exactly this format, no other text:
       "description": "string (1 sentence)",
       "target_skill": "string (the specific skill this builds toward the main goal)",
       "standard_alignment": "string (e.g. RI.3.2) or null",
-      "steps": [
+${passageField}      "steps": [
         {
           "title": "string",
           "description": "string (1-2 sentences)",
@@ -41,11 +57,13 @@ Return ONLY valid JSON in exactly this format, no other text:
 Rules:
 - 3-4 subgoals, scaffolded from foundational to grade-level to challenge.
 - Each subgoal has 2-3 steps. Each step has exactly 6 questions: 2 easy, 2 medium, 2 hard.
-- Multiple choice, exactly 4 options, correct_index 0-based.
+- Multiple choice, exactly 4 options, correct_index 0-based pointing to the genuinely correct option (double-check every answer, especially math).
+${passageRules}
 - star_reward: 5 easy, 10 medium, 15-20 hard/test-prep.
 - Questions match NYSTP style for ELA and math, age-appropriate for the grade.
 - The first subgoal's first step must be accessible even to a struggling student.
 - assessments: 2-4 teacher-facing checkpoints. If a curriculum is provided, align them to its units; otherwise base them on the goal's standard. These must NOT duplicate student step content.`;
+}
 
 interface GenStep {
   title: string;
@@ -55,11 +73,16 @@ interface GenStep {
   star_reward: number;
   activities: { questions: RoadmapQuestion[] };
 }
+interface GenPassage {
+  title: string;
+  text: string;
+}
 interface GenSubgoal {
   title: string;
   description: string | null;
   target_skill: string | null;
   standard_alignment: string | null;
+  passage?: GenPassage | null;
   steps: GenStep[];
 }
 interface GenAssessment {
@@ -72,6 +95,23 @@ interface GenRoadmap {
   subgoals?: GenSubgoal[];
   steps?: GenStep[]; // legacy flat format
   assessments?: GenAssessment[];
+}
+
+/**
+ * Pull the JSON object out of a model response. Tolerates ```json fences and
+ * any stray prose before/after the object by slicing from the first "{" to the
+ * last "}". More robust than line-anchored fence stripping.
+ */
+function extractJson(text: string): string {
+  let t = text.trim();
+  // Strip a leading fence (```json or ```) and a trailing fence if present.
+  t = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const first = t.indexOf("{");
+  const last = t.lastIndexOf("}");
+  if (first !== -1 && last !== -1 && last > first) {
+    return t.slice(first, last + 1);
+  }
+  return t;
 }
 
 export async function POST(request: Request) {
@@ -145,12 +185,25 @@ Priority: ${goal.priority}${curriculumBlock}
 
 Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus 2-4 teacher-only assessment checkpoints.`;
 
+    // A full roadmap (up to 4 subgoals x 3 steps x 6 questions = 72 MCQs plus
+    // assessments) is large. 8000 tokens truncated the JSON mid-stream on the
+    // bigger roadmaps, which then failed to parse — the "roadmaps don't build
+    // out" bug. Give the model enough room and detect truncation explicitly.
+    const math = isMathSubject(goal.subject);
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 8000,
-      system: SYSTEM_PROMPT,
+      max_tokens: 20000,
+      system: buildSystemPrompt(math),
       messages: [{ role: "user", content: userMessage }],
     });
+
+    if (message.stop_reason === "max_tokens") {
+      console.error("Roadmap generation hit max_tokens — response truncated.");
+      return NextResponse.json(
+        { error: "The roadmap was too large to finish generating. Please try again." },
+        { status: 500 }
+      );
+    }
 
     const content = message.content[0];
     if (content.type !== "text") {
@@ -162,11 +215,7 @@ Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus
 
     let data: GenRoadmap;
     try {
-      const cleaned = content.text
-        .replace(/^```(?:json)?\n?/m, "")
-        .replace(/\n?```$/m, "")
-        .trim();
-      data = JSON.parse(cleaned);
+      data = JSON.parse(extractJson(content.text));
     } catch {
       console.error("JSON parse error. Raw response:", content.text);
       return NextResponse.json(
@@ -242,9 +291,15 @@ Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus
         .single();
       if (sgErr || !subgoalRow) {
         console.error("Subgoal insert error:", sgErr);
-        return NextResponse.json({ error: "Failed to save subgoals." }, { status: 500 });
+        // Roll back the half-built roadmap so the teacher doesn't see a broken
+        // shell (cascade clears any subgoals/steps inserted so far).
+        await supabase.from("learning_roadmaps").delete().eq("id", roadmap.id);
+        return NextResponse.json({ error: "Failed to save subgoals. Please try again." }, { status: 500 });
       }
 
+      // Non-math subgoals carry one shared passage; copy it onto each step's
+      // activities so the workout player can render it above the questions.
+      const sgPassage = !math && sg.passage?.text ? sg.passage : null;
       const stepsToInsert = (sg.steps ?? []).map((step) => {
         globalOrder += 1;
         return {
@@ -256,7 +311,7 @@ Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus
           workout_type: step.workout_type,
           standard_alignment: step.standard_alignment ?? null,
           star_reward: step.star_reward ?? 10,
-          activities: step.activities,
+          activities: { ...step.activities, passage: sgPassage },
           status: globalOrder === 1 ? "active" : "locked",
         };
       });
@@ -264,7 +319,8 @@ Generate the roadmap as 3-4 subgoals (2-3 steps each, 6 questions per step) plus
         const { error: stepsErr } = await supabase.from("roadmap_steps").insert(stepsToInsert);
         if (stepsErr) {
           console.error("Steps insert error:", stepsErr);
-          return NextResponse.json({ error: "Failed to save roadmap steps." }, { status: 500 });
+          await supabase.from("learning_roadmaps").delete().eq("id", roadmap.id);
+          return NextResponse.json({ error: "Failed to save roadmap steps. Please try again." }, { status: 500 });
         }
       }
     }

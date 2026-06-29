@@ -15,6 +15,7 @@ const RARITY_COLOR: Record<Rarity, string> = {
   rare: "#2563EB",
   epic: "#7C3AED",
   legendary: "#D97706",
+  mythic: "#DB2777",
 };
 
 const RARITY_BG: Record<Rarity, string> = {
@@ -23,9 +24,34 @@ const RARITY_BG: Record<Rarity, string> = {
   rare: "#EFF6FF",
   epic: "#F5F3FF",
   legendary: "#FFFBEB",
+  mythic: "#FDF2F8",
 };
 
-const CATEGORIES = ["all", "animals", "history", "science", "world", "goods", "skins"] as const;
+const CATEGORIES = [
+  "all",
+  "animals",
+  "history",
+  "science",
+  "world",
+  "goods",
+  "skins",
+  "space",
+  "mythical",
+  "tech",
+  "sports",
+  "nature",
+] as const;
+
+// Tiers shown most-attainable → most-aspirational, each as its own section.
+const TIER_ORDER: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary", "mythic"];
+const TIER_META: Record<Rarity, { label: string; blurb: string }> = {
+  common: { label: "Common", blurb: "Great starter collectibles" },
+  uncommon: { label: "Uncommon", blurb: "A step up" },
+  rare: { label: "Rare", blurb: "Harder to earn" },
+  epic: { label: "Epic", blurb: "Big achievements" },
+  legendary: { label: "Legendary", blurb: "For dedicated learners" },
+  mythic: { label: "Mythic", blurb: "The ultimate grails — save up!" },
+};
 type CategoryFilter = (typeof CATEGORIES)[number];
 type AffordFilter = "all" | "available" | "owned";
 
@@ -117,7 +143,6 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
             WebkitBackfaceVisibility: "hidden",
             background: "white",
             borderRadius: "12px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             padding: "1.25rem",
             display: "flex",
             flexDirection: "column",
@@ -125,7 +150,15 @@ function FlipCard({ item, owned, canAfford, flipped, starBalance, onFlip, onPurc
             justifyContent: "center",
             gap: "0.5rem",
             opacity: dimmed ? 0.55 : 1,
-            border: owned ? "2px solid #00A896" : "1px solid transparent",
+            border: owned
+              ? "2px solid #00A896"
+              : item.rarity === "mythic"
+              ? "2px solid #DB2777"
+              : "1px solid transparent",
+            boxShadow:
+              item.rarity === "mythic" && !owned
+                ? "0 0 0 1px #FBCFE8, 0 4px 16px rgba(219,39,119,0.18)"
+                : "0 1px 4px rgba(0,0,0,0.06)",
             transition: "box-shadow 0.15s",
           }}
         >
@@ -573,23 +606,78 @@ export default function StarStorePage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {filteredItems.map((item) => (
-              <FlipCard
-                key={item.id}
-                item={item}
-                owned={ownedItemIds.has(item.id)}
-                canAfford={starBalance >= item.star_cost}
-                flipped={flippedCards.has(item.id)}
-                starBalance={starBalance}
-                onFlip={() => toggleFlip(item.id)}
-                onPurchaseClick={() => {
-                  setPurchaseError(null);
-                  setConfirmItem(item);
-                }}
-              />
-            ))}
-          </div>
+          TIER_ORDER.map((tier) => {
+            const tierItems = filteredItems
+              .filter((i) => i.rarity === tier)
+              .sort((a, b) => a.star_cost - b.star_cost);
+            if (tierItems.length === 0) return null;
+            const color = RARITY_COLOR[tier];
+            const meta = TIER_META[tier];
+            const costs = tierItems.map((i) => i.star_cost);
+            const lo = Math.min(...costs);
+            const hi = Math.max(...costs);
+            return (
+              <section key={tier} style={{ marginBottom: "2rem" }}>
+                {/* Tier heading */}
+                <div
+                  className="flex items-center gap-3 flex-wrap"
+                  style={{
+                    background: RARITY_BG[tier],
+                    borderLeft: `5px solid ${color}`,
+                    borderRadius: "10px",
+                    padding: "0.625rem 1rem",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-nunito), sans-serif",
+                      fontSize: "1.125rem",
+                      fontWeight: 800,
+                      color,
+                    }}
+                  >
+                    {meta.label}
+                  </span>
+                  <span
+                    className="flex items-center gap-1"
+                    style={{
+                      background: "white",
+                      color,
+                      borderRadius: "100px",
+                      padding: "0.125rem 0.625rem",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    <Star size={11} color={color} fill={color} aria-hidden="true" />
+                    {lo === hi ? lo : `${lo}–${hi}`}
+                  </span>
+                  <span style={{ fontSize: "0.8125rem", color: "#64748B" }}>
+                    {meta.blurb} · {tierItems.length} item{tierItems.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {tierItems.map((item) => (
+                    <FlipCard
+                      key={item.id}
+                      item={item}
+                      owned={ownedItemIds.has(item.id)}
+                      canAfford={starBalance >= item.star_cost}
+                      flipped={flippedCards.has(item.id)}
+                      starBalance={starBalance}
+                      onFlip={() => toggleFlip(item.id)}
+                      onPurchaseClick={() => {
+                        setPurchaseError(null);
+                        setConfirmItem(item);
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })
         )}
       </main>
 

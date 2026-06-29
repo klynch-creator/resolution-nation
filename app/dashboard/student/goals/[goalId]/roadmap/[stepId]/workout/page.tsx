@@ -19,6 +19,7 @@ import {
   BicepsFlexed,
 } from "lucide-react";
 import type { Profile, Goal, RoadmapStep, RoadmapQuestion } from "@/types";
+import { ReadAloud } from "@/lib/read-aloud";
 
 // ─── Difficulty helpers ───────────────────────────────────────────────────────
 
@@ -813,6 +814,55 @@ export default function WorkoutPage() {
       >
         {currentQ && (
           <>
+            {/* Reading passage (if present) */}
+            {step?.activities?.passage?.text && (
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "16px",
+                  padding: "1.25rem 1.5rem",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                  marginBottom: "1rem",
+                  width: "100%",
+                  borderLeft: "4px solid #028090",
+                }}
+              >
+                <div className="flex items-center justify-between gap-2" style={{ marginBottom: "0.5rem" }}>
+                  <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                    <BookOpen size={16} color="#028090" aria-hidden="true" />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-nunito), sans-serif",
+                        fontWeight: 800,
+                        color: "#0C2340",
+                        fontSize: "1rem",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {step.activities.passage.title || "Reading Passage"}
+                    </span>
+                  </div>
+                  <ReadAloud
+                    text={`${step.activities.passage.title}. ${step.activities.passage.text}`}
+                    label="Read passage"
+                  />
+                </div>
+                <div
+                  style={{
+                    maxHeight: "220px",
+                    overflowY: "auto",
+                    fontSize: "1rem",
+                    color: "#374151",
+                    lineHeight: 1.7,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {step.activities.passage.text}
+                </div>
+              </div>
+            )}
             {/* Question card */}
             <div
               style={{
@@ -824,18 +874,24 @@ export default function WorkoutPage() {
                 width: "100%",
               }}
             >
-              <p
-                style={{
-                  fontFamily: "var(--font-nunito), sans-serif",
-                  fontSize: "1.25rem",
-                  fontWeight: 800,
-                  color: "#0C2340",
-                  lineHeight: 1.55,
-                  margin: 0,
-                }}
-              >
-                {currentQ.question}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p
+                  style={{
+                    fontFamily: "var(--font-nunito), sans-serif",
+                    fontSize: "1.25rem",
+                    fontWeight: 800,
+                    color: "#0C2340",
+                    lineHeight: 1.55,
+                    margin: 0,
+                  }}
+                >
+                  {currentQ.question}
+                </p>
+                <ReadAloud
+                  text={`${currentQ.question}. Option A: ${currentQ.options[0]}. Option B: ${currentQ.options[1]}. Option C: ${currentQ.options[2]}. Option D: ${currentQ.options[3]}.`}
+                  label=""
+                />
+              </div>
 
               {showHint && (
                 <div
