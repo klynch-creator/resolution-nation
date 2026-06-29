@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "crypto";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
-import type { LessonTier, RoadmapQuestion } from "@/types";
+import type { LessonTier, RoadmapQuestion, CurriculumExtract } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +27,10 @@ function isMathSubject(subject: string): boolean {
   return /\bmath/i.test(subject);
 }
 
+function isSpellingSubject(subject: string): boolean {
+  return /\bspell/i.test(subject);
+}
+
 /** Pull the JSON object out of a model response, tolerating fences/prose. */
 function extractJson(text: string): string {
   let t = text.trim();
@@ -37,15 +41,33 @@ function extractJson(text: string): string {
   return t;
 }
 
-function buildSystemPrompt(plan: { total: number; easy: number; medium: number; hard: number }, math: boolean): string {
-  const passageBlock = math
-    ? ""
-    : `  "passage": { "title": "string", "text": "string (the reading passage)" },
-`;
-  const passageRules = math
-    ? `- This is MATH: no reading passage. Use clear, self-contained word problems and computation questions. Set "passage" to null.`
-    : `- Include a "passage": an original, grade-level reading passage (about 200–400 words, scaled to the grade) written in the style of a state standardized test (e.g. NYSTP / state ELA & content-area tests): informational or literary, with a clear main idea, structure, and grade-appropriate academic vocabulary.
+function buildSystemPrompt(
+  plan: { total: number; easy: number; medium: number; hard: number },
+  opts: { math: boolean; spelling: boolean; spellingCurriculum: string | null }
+): string {
+  const { math, spelling, spellingCurriculum } = opts;
+  const usePassage = !math && !spelling;
+  const passageBlock = usePassage
+    ? `  "passage": { "title": "string", "text": "string (the reading passage)" },
+`
+    : "";
+
+  let contentRules: string;
+  if (spelling) {
+    contentRules = `- This is a SPELLING lesson: no reading passage. Set "passage" to null.
+- Each question targets spelling. Vary the formats: choose the correctly spelled word; find the misspelled word; pick the right spelling to complete a sentence; choose the correct plural/past-tense/affixed form. Use the word in a short sentence for context where helpful.
+- Distractors must be realistic misspellings (common errors for the grade), not random.
+- Scale word difficulty to the grade and tier.${
+      spellingCurriculum
+        ? `\n- ALIGN to the teacher's curriculum. Use these spelling words / patterns from the school's curriculum as the basis of the lesson:\n${spellingCurriculum}`
+        : `\n- No curriculum was provided, so build a grade-appropriate spelling lesson at the student's level (grade-level high-frequency words and spelling patterns/word families).`
+    }`;
+  } else if (math) {
+    contentRules = `- This is MATH: no reading passage. Use clear, self-contained word problems and computation questions. Set "passage" to null.`;
+  } else {
+    contentRules = `- Include a "passage": an original, grade-level reading passage (about 200–400 words, scaled to the grade) written in the style of a state standardized test (e.g. NYSTP / state ELA & content-area tests): informational or literary, with a clear main idea, structure, and grade-appropriate academic vocabulary.
 - MOST questions must require reading the passage to answer (main idea, key details, inference, vocabulary-in-context, author's purpose, text structure) — mirroring real state-test items. Quote or reference the passage where natural.`;
+  }
 
   return `You are an expert K-12 teacher and assessment writer creating a single rigorous, engaging lesson for one student. Your questions should mirror the rigor and style of state standardized tests — not easy trivia.
 
@@ -70,7 +92,7 @@ Rules:
 - Multiple choice, exactly 4 options each. Exactly ONE option is correct; the other three are plausible distractors (common misconceptions), not obviously wrong.
 - correct_index is 0-based (0=A, 1=B, 2=C, 3=D) and MUST point to the genuinely correct option. Double-check every answer, especially math computations.
 - Questions should be challenging and test-like — favor reasoning, multi-step problems, and inference over recall.
-${passageRules}
+${contentRules}
 - Age-appropriate and safe for K-12. No violence, adult themes, or sensitive content.
 - Make it specific and interesting, not generic.
 - Do NOT reproduce any of the topics listed as already-completed.`;
@@ -279,9 +301,44 @@ export async function POST(request: Request) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
     const math = isMathSubject(subject);
+    const spelling = isSpellingSubject(subject);
     const plan = QUESTION_PLAN[tier];
-    const systemPrompt = buildSystemPrompt(plan, math);
 
+    // Spelling lessons align to the student's teacher's confirmed curriculum if
+    // one exists; otherwise the AI defaults to grade-level spelling.
+    let spellingCurriculum: string | null = null;
+    if (spelling) {
+      const { data: studentGoals } = await supabase
+        .from("goals")
+        .select("teacher_id")
+        .eq("student_id", studentId);
+      const teacherIds = Array.from(
+        new Set((studentGoals ?? []).map((g) => g.teacher_id).filter(Boolean))
+      );
+      if (teacherIds.length > 0) {
+        const { data: curric } = await supabase
+          .from("curricula")
+          .select("title, extracted, subject, created_at")
+          .in("teacher_id", teacherIds as string[])
+          .order("created_at", { ascending: false });
+        // Prefer a spelling/ELA curriculum, else the most recent confirmed one.
+        const pick =
+          (curric ?? []).find((c) => /spell|ela|english|reading|word/i.test(c.subject ?? "")) ??
+          (curric ?? [])[0];
+        const extract = pick?.extracted as CurriculumExtract | null;
+        const units = (extract?.units ?? [])
+          .map(
+            (u) =>
+              `- ${u.name}${u.skills?.length ? ` — words/patterns: ${u.skills.join(", ")}` : ""}`
+          )
+          .join("\n");
+        if (units) spellingCurriculum = `Curriculum "${pick?.title}":\n${units}`;
+      }
+    }
+
+    const systemPrompt = buildSystemPrompt(plan, { math, spelling, spellingCurriculum });
+
+    const usePassage = !math && !spelling;
     const userMessage = `Subject: ${subject}
 Grade level: ${grade}
 Difficulty tier: ${tier} — ${TIER_GUIDANCE[tier]}
@@ -289,7 +346,7 @@ ${requestedTopic ? `Requested topic: ${requestedTopic}` : "Topic: you choose a f
 ${goalText ? `This lesson should help the student toward their goal: "${goalText}"${goalStandard ? ` (standard ${goalStandard})` : ""}.` : ""}
 Already-completed topics (do NOT repeat any of these): ${priorTopics.length ? priorTopics.join("; ") : "none yet"}
 
-Write a ${plan.total}-question lesson now${math ? "" : ", including the reading passage"}. Make it as rigorous as a real state test for this grade.`;
+Write a ${plan.total}-question lesson now${usePassage ? ", including the reading passage" : ""}. Make it as rigorous as a real state test for this grade.`;
 
     // Generate, with a couple of retries if we hit a content_key collision.
     let generated: GeneratedLesson | null = null;
@@ -310,7 +367,7 @@ Write a ${plan.total}-question lesson now${math ? "" : ", including the reading 
         if (!parsed.questions || parsed.questions.length === 0) continue;
 
         // Independent answer-key check — fix wrong keys, drop broken items.
-        const passage = math ? null : parsed.passage ?? null;
+        const passage = usePassage ? parsed.passage ?? null : null;
         const cleanedQuestions = await verifyQuestions(
           anthropic,
           subject,
@@ -346,7 +403,7 @@ Write a ${plan.total}-question lesson now${math ? "" : ", including the reading 
 
     const topic = generated.topic ?? requestedTopic ?? subject;
     const starReward = tier === "below" ? 5 : tier === "above" ? 15 : 10;
-    const passageOut = math ? null : generated.passage ?? null;
+    const passageOut = usePassage ? generated.passage ?? null : null;
 
     const { data: lesson, error: insertError } = await supabase
       .from("lessons")

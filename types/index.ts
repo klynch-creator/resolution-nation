@@ -4,7 +4,7 @@ export type PodMemberRole = "admin" | "member" | "viewer";
 export type UploadStatus = "pending" | "reviewed" | "confirmed";
 export type GoalPriority = "critical" | "high" | "medium";
 export type GoalStatus = "not_started" | "in_progress" | "completed";
-export type GoalSubject = "ELA" | "Math" | "Science" | "Social Studies" | "Writing" | "Other";
+export type GoalSubject = "ELA" | "Math" | "Science" | "History" | "Writing" | "Other";
 
 export interface Goal {
   id: string;

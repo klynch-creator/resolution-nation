@@ -12,7 +12,7 @@ const SUBJECTS: GoalSubject[] = [
   "ELA",
   "Math",
   "Science",
-  "Social Studies",
+  "History",
   "Writing",
   "Other",
 ];

@@ -26,7 +26,7 @@ Priority rules:
 - Generate 3-8 goals maximum, focusing on the most important needs first
 - Make the friendly_text inspiring and specific, not generic
 - Use real Common Core or state standard codes when possible
-- Subject must be one of: ELA, Math, Science, Social Studies, Writing, Other`;
+- Subject must be one of: ELA, Math, Science, History, Writing, Other`;
 
 interface GeneratedGoal {
   friendly_text: string;

@@ -10,7 +10,7 @@ import type { Curriculum, CurriculumExtract, CurriculumUnit } from "@/types";
 
 type Phase = "list" | "form" | "uploading" | "extracting" | "review" | "saving";
 
-const SUBJECTS = ["ELA", "Math", "Science", "Social Studies", "Writing", "Reading", "Other"];
+const SUBJECTS = ["ELA", "Math", "Science", "History", "Writing", "Reading", "Spelling", "Other"];
 
 function fileKind(file: File): "pdf" | "csv" | "txt" | null {
   const n = file.name.toLowerCase();

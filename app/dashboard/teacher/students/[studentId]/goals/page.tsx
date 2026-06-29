@@ -20,7 +20,7 @@ const SUBJECTS: GoalSubject[] = [
   "ELA",
   "Math",
   "Science",
-  "Social Studies",
+  "History",
   "Writing",
   "Other",
 ];
@@ -167,6 +167,7 @@ export default function TeacherStudentGoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmedUploadId, setConfirmedUploadId] = useState<string | null>(null);
+  const [bestWcpm, setBestWcpm] = useState<number | null>(null);
 
   const [form, setForm] = useState<GoalFormState>(defaultForm);
   const [saving, setSaving] = useState(false);
@@ -209,6 +210,15 @@ export default function TeacherStudentGoalsPage() {
         .single();
 
       if (studentData) setStudent(studentData);
+
+      // Highest current reading-fluency score (WCPM) for the header.
+      const { data: fluency } = await supabase
+        .from("fluency_attempts")
+        .select("wcpm")
+        .eq("student_id", studentId)
+        .order("wcpm", { ascending: false })
+        .limit(1);
+      if (fluency && fluency.length > 0) setBestWcpm(fluency[0].wcpm as number);
 
       // Check for a confirmed report card upload
       const { data: upload } = await supabase
@@ -518,6 +528,14 @@ export default function TeacherStudentGoalsPage() {
               <p style={{ fontSize: "0.9375rem", color: "#64748B" }}>
                 {goals.length} goal{goals.length !== 1 ? "s" : ""} created
                 {student?.grade ? ` · Grade ${student.grade}` : ""}
+                {bestWcpm != null && (
+                  <>
+                    {" · "}
+                    <span style={{ color: "#7C3AED", fontWeight: 600 }}>
+                      📖 {bestWcpm} WCPM
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           </div>
