@@ -12,10 +12,19 @@ import { createClient } from "@/lib/supabase/client";
 interface WorkoutResponse {
   id: string;
   user_id: string;
-  step_id: string;
+  step_id: string | null;
+  lesson_id: string | null;
   difficulty: "easy" | "medium" | "hard" | null;
   is_correct: boolean | null;
   created_at: string;
+}
+
+interface LessonLite {
+  id: string;
+  subject: string | null;
+  topic: string | null;
+  title: string | null;
+  standard_alignment: string | null;
 }
 
 interface Goal {
@@ -59,6 +68,8 @@ interface AnalyticsState {
   roadmaps: Roadmap[];
   steps: Step[];
   stars: StarTransaction[];
+  lessons: LessonLite[];
+  fluencyBests: number[]; // each student's best WCPM
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -310,6 +321,8 @@ export default function TeacherAnalyticsPage() {
     roadmaps: [],
     steps: [],
     stars: [],
+    lessons: [],
+    fluencyBests: [],
   });
 
   useEffect(() => {
@@ -373,15 +386,36 @@ export default function TeacherAnalyticsPage() {
       });
       studentIds = [...new Set(studentIds)];
 
-      // 3. Workout responses (RLS filters to teacher's roadmaps)
+      // 3. Workout responses (RLS filters to teacher's roadmaps + lessons)
       let responses: WorkoutResponse[] = [];
+      let lessons: LessonLite[] = [];
+      let fluencyBests: number[] = [];
       if (studentIds.length > 0) {
         const { data: resp } = await supabase
           .from("workout_responses")
-          .select("id, user_id, step_id, difficulty, is_correct, created_at")
+          .select("id, user_id, step_id, lesson_id, difficulty, is_correct, created_at")
           .in("user_id", studentIds)
           .order("created_at", { ascending: true });
         responses = resp ?? [];
+
+        // Lessons (library + roadmap) for these students, for skill attribution.
+        const { data: lessonData } = await supabase
+          .from("lessons")
+          .select("id, subject, topic, title, standard_alignment")
+          .in("student_id", studentIds);
+        lessons = lessonData ?? [];
+
+        // Each student's best WCPM (class fluency).
+        const { data: fluencyData } = await supabase
+          .from("fluency_attempts")
+          .select("student_id, wcpm")
+          .in("student_id", studentIds);
+        const bestByStudent = new Map<string, number>();
+        (fluencyData ?? []).forEach((a: { student_id: string; wcpm: number }) => {
+          const cur = bestByStudent.get(a.student_id) ?? 0;
+          if (a.wcpm > cur) bestByStudent.set(a.student_id, a.wcpm);
+        });
+        fluencyBests = [...bestByStudent.values()];
       }
 
       // 4. Goals for teacher
@@ -419,7 +453,7 @@ export default function TeacherAnalyticsPage() {
         stars = starData ?? [];
       }
 
-      setState({ loading: false, students, responses, goals, roadmaps, steps, stars });
+      setState({ loading: false, students, responses, goals, roadmaps, steps, stars, lessons, fluencyBests });
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -430,7 +464,7 @@ export default function TeacherAnalyticsPage() {
     router.push("/");
   }
 
-  const { loading, students, responses, goals, roadmaps, steps, stars } = state;
+  const { loading, students, responses, goals, roadmaps, steps, stars, lessons, fluencyBests } = state;
 
   // ── Computed stats ────────────────────────────────────────────────────────
 
@@ -474,32 +508,44 @@ export default function TeacherAnalyticsPage() {
       .forEach((s) => stepToGoal.set(s.id, rm.goal_id));
   });
 
-  const SKILLS = ["Phonics", "Sight Words", "Fluency", "Comprehension"];
-  const skillKeywords: Record<string, string[]> = {
-    Phonics: ["phonics", "phoneme", "phonological"],
-    "Sight Words": ["sight word", "sight-word", "high frequency"],
-    Fluency: ["fluency", "fluent", "reading rate"],
-    Comprehension: ["comprehension", "understand", "main idea", "inference"],
-  };
-  const skillStats: Record<string, { correct: number; total: number }> = {};
-  SKILLS.forEach((s) => (skillStats[s] = { correct: 0, total: 0 }));
+  // Promotional literacy standards: Comprehension + Writing, scored class-wide
+  // from BOTH library lessons (lesson_id) and roadmap steps (step_id). Fluency
+  // is shown separately as the class average best WCPM.
+  const COMPREHENSION = /comprehen|main idea|inferen|\brl\.|\bri\.|reading|\bela\b|literacy|passage|theme|author|context|summar|detail/i;
+  const WRITING = /writ|essay|paragraph|grammar|convention|\bw\.\d|sentence|punctuat|narrative|opinion|informative/i;
 
   const goalMap = new Map(goals.map((g) => [g.id, g]));
+  const lessonTextMap = new Map(
+    lessons.map((l) => [
+      l.id,
+      `${l.subject ?? ""} ${l.topic ?? ""} ${l.title ?? ""} ${l.standard_alignment ?? ""}`.toLowerCase(),
+    ])
+  );
+  const skillStats = {
+    Comprehension: { correct: 0, total: 0 },
+    Writing: { correct: 0, total: 0 },
+  };
   responses.forEach((r) => {
-    const goalId = stepToGoal.get(r.step_id);
-    if (!goalId) return;
-    const goal = goalMap.get(goalId);
-    if (!goal) return;
-    const text = (goal.friendly_text + " " + (goal.subject ?? "")).toLowerCase();
-    SKILLS.forEach((skill) => {
-      if (skillKeywords[skill].some((kw) => text.includes(kw))) {
-        skillStats[skill].total++;
-        if (r.is_correct) skillStats[skill].correct++;
-      }
-    });
+    let text: string | null = null;
+    if (r.lesson_id) {
+      text = lessonTextMap.get(r.lesson_id) ?? null;
+    } else if (r.step_id) {
+      const goalId = stepToGoal.get(r.step_id);
+      const goal = goalId ? goalMap.get(goalId) : undefined;
+      if (goal) text = (goal.friendly_text + " " + (goal.subject ?? "")).toLowerCase();
+    }
+    if (!text) return;
+    if (COMPREHENSION.test(text)) {
+      skillStats.Comprehension.total++;
+      if (r.is_correct) skillStats.Comprehension.correct++;
+    }
+    if (WRITING.test(text)) {
+      skillStats.Writing.total++;
+      if (r.is_correct) skillStats.Writing.correct++;
+    }
   });
 
-  const literacyBars = SKILLS.map((skill) => ({
+  const literacyBars = (["Comprehension", "Writing"] as const).map((skill) => ({
     label: skill,
     pct:
       skillStats[skill].total > 0
@@ -507,6 +553,12 @@ export default function TeacherAnalyticsPage() {
         : 0,
     hasData: skillStats[skill].total > 0,
   }));
+
+  // Class fluency: average of each student's best WCPM.
+  const classAvgWcpm =
+    fluencyBests.length > 0
+      ? Math.round(fluencyBests.reduce((a, b) => a + b, 0) / fluencyBests.length)
+      : null;
 
   // Student roster rows (sorted by accuracy ascending)
   const rosterRows = students
@@ -535,7 +587,7 @@ export default function TeacherAnalyticsPage() {
     const gStepIds = new Set(
       steps.filter((s) => gRoadmaps.some((rm) => rm.id === s.roadmap_id)).map((s) => s.id)
     );
-    const gResponses = responses.filter((r) => gStepIds.has(r.step_id));
+    const gResponses = responses.filter((r) => r.step_id != null && gStepIds.has(r.step_id));
     if (!standardMap.has(g.standard_code)) {
       standardMap.set(g.standard_code, {
         description: g.friendly_text,
@@ -781,12 +833,40 @@ export default function TeacherAnalyticsPage() {
                 </h2>
                 {loading ? (
                   <div style={{ height: "120px", background: "#F1F5F9", borderRadius: "8px" }} />
-                ) : literacyBars.every((b) => !b.hasData) ? (
-                  <p style={{ color: "#94A3B8", fontSize: "0.9375rem" }}>
-                    No data yet. Complete some workouts to see skill breakdowns.
-                  </p>
                 ) : (
-                  <HBarChart bars={literacyBars} />
+                  <>
+                    {/* Class fluency — average best WCPM */}
+                    <div
+                      className="flex items-center justify-between"
+                      style={{
+                        background: "#F8FAFC",
+                        borderRadius: "10px",
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "0.875rem", color: "#374151", fontWeight: 600 }}>Fluency</div>
+                        <div style={{ fontSize: "0.6875rem", color: "#94A3B8" }}>class avg of best WCPM</div>
+                      </div>
+                      {classAvgWcpm != null ? (
+                        <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#7C3AED", lineHeight: 1 }}>
+                          {classAvgWcpm}
+                          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B" }}> wcpm</span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "0.8125rem", color: "#94A3B8" }}>No reads yet</span>
+                      )}
+                    </div>
+
+                    {literacyBars.every((b) => !b.hasData) ? (
+                      <p style={{ color: "#94A3B8", fontSize: "0.9375rem" }}>
+                        No comprehension or writing data yet. Completed reading and writing lessons will show here.
+                      </p>
+                    ) : (
+                      <HBarChart bars={literacyBars} />
+                    )}
+                  </>
                 )}
               </div>
             </div>
