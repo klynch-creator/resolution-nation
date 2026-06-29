@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Star, Target, Map, School, Layers, BookOpen, Sparkles, Mic } from "lucide-react";
+import { Star, Target, Map, School, Layers, BookOpen, Sparkles, Mic, PenLine } from "lucide-react";
 import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
 
 export default function StudentDashboard() {
@@ -205,6 +205,7 @@ export default function StudentDashboard() {
             { href: "/dashboard/student", label: "Dashboard", active: true, Icon: null },
             { href: "/dashboard/student/goals", label: "My Goals", active: false, Icon: null },
             { href: "/dashboard/student/lessons", label: "Lessons", active: false, Icon: BookOpen },
+            { href: "/dashboard/student/writing", label: "Writing", active: false, Icon: PenLine },
             { href: "/dashboard/student/fluency", label: "Read Aloud", active: false, Icon: Mic },
             { href: "/dashboard/student/store", label: "Store", active: false, Icon: Star },
             { href: "/dashboard/student/collection", label: "Collection", active: false, Icon: Layers },

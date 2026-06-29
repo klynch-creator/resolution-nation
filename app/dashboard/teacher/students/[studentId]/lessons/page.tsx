@@ -7,6 +7,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import LessonHistory from "@/app/dashboard/_components/LessonHistory";
+import WritingReview from "@/app/dashboard/_components/WritingReview";
 import type { Lesson, StudentSkillTier } from "@/types";
 
 export default function TeacherStudentLessonsPage() {
@@ -164,6 +165,8 @@ export default function TeacherStudentLessonsPage() {
             </div>
 
             <LessonHistory lessons={lessons} skillTiers={skillTiers} />
+
+            <WritingReview studentId={studentId} />
           </>
         )}
       </main>

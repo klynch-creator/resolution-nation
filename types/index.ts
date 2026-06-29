@@ -27,6 +27,9 @@ export interface Profile {
   grade?: string | null;
   avatar_url?: string | null;
   created_at: string;
+  is_frozen?: boolean;
+  frozen_at?: string | null;
+  frozen_reason?: string | null;
 }
 
 export interface Pod {
@@ -401,5 +404,66 @@ export interface ParentMessage {
   body_spanish: string | null;
   sent_at: string;
   read_at: string | null;
+  created_at: string;
+}
+
+// ─── Phase 14: Writing Workshop ─────────────────────────────────────────────
+
+export type WritingMode = "short_response" | "essay";
+
+export interface PasteEvent {
+  at: string; // ISO timestamp
+  chars: number; // length of attempted paste
+}
+
+export interface WritingSubmission {
+  id: string;
+  student_id: string;
+  assignment_id: string | null;
+  mode: WritingMode;
+  subject: string | null;
+  grade: string | null;
+  standard_alignment: string | null;
+  passage_title: string | null;
+  passage_text: string | null;
+  prompt: string;
+  response_text: string;
+  rubric_max: number | null;
+  score: number | null;
+  strengths: string | null;
+  feedback: string | null;
+  improvement: string | null;
+  status: "submitted" | "graded";
+  paste_flagged: boolean;
+  paste_events: PasteEvent[] | null;
+  created_at: string;
+  graded_at: string | null;
+}
+
+export interface CreativeStory {
+  id: string;
+  student_id: string;
+  title: string;
+  content: string;
+  word_count: number;
+  paste_flagged: boolean;
+  paste_events: PasteEvent[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModerationFlag {
+  id: string;
+  student_id: string;
+  source_type: "writing_submission" | "creative_story";
+  source_id: string | null;
+  mode: string | null;
+  excerpt: string | null;
+  reason: string | null;
+  categories: string | null;
+  severity: "flag" | "block";
+  resolved: boolean;
+  resolved_by: string | null;
+  resolved_at: string | null;
   created_at: string;
 }

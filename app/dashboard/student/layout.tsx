@@ -1,4 +1,5 @@
 import { Nunito } from "next/font/google";
+import { FrozenGate } from "@/lib/frozen-gate";
 
 // Friendlier, rounded font for the student-facing experience only.
 // Exposed as a CSS variable so existing inline `fontFamily` styles can
@@ -12,5 +13,9 @@ const nunito = Nunito({
 });
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
-  return <div className={nunito.variable}>{children}</div>;
+  return (
+    <div className={nunito.variable}>
+      <FrozenGate>{children}</FrozenGate>
+    </div>
+  );
 }

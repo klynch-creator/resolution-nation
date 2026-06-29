@@ -524,6 +524,28 @@ export default function ParentDashboard() {
 
   return (
     <main style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem 1.25rem" }}>
+      {/* Account-paused notice from content moderation */}
+      {child?.is_frozen && (
+        <div
+          className="card"
+          style={{
+            padding: "1.25rem 1.5rem",
+            marginBottom: "1.5rem",
+            borderLeft: "4px solid #DC2626",
+            background: "#FEF2F2",
+          }}
+        >
+          <p style={{ fontWeight: 700, color: "#991B1B", marginBottom: "0.25rem" }}>
+            ⚠️ {firstName}&apos;s account is paused
+          </p>
+          <p style={{ color: "#374151", fontSize: "0.9375rem", lineHeight: 1.6 }}>
+            Something {firstName} wrote was flagged for review. Their teacher has been notified, can see exactly what
+            was written, and will turn the account back on after reviewing. Please reach out to the teacher with any
+            questions.
+          </p>
+        </div>
+      )}
+
       {/* Welcome */}
       <div className="mb-6">
         <h1
