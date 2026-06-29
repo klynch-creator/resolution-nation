@@ -481,6 +481,15 @@ export default function TeacherStudentGoalsPage() {
           <span style={{ ...navLinkStyle(true), cursor: "default" }}>
             {student?.full_name ?? "Student"}&apos;s Goals
           </span>
+          <Link href={`/dashboard/teacher/students/${studentId}/lessons`} style={navLinkStyle(false)}>
+            Lessons
+          </Link>
+          <Link href={`/dashboard/teacher/students/${studentId}/fluency`} style={navLinkStyle(false)}>
+            Fluency
+          </Link>
+          <Link href={`/dashboard/teacher/students/${studentId}/analytics`} style={navLinkStyle(false)}>
+            Analytics
+          </Link>
         </div>
       </nav>
 
