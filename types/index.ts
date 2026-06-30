@@ -26,6 +26,7 @@ export interface Profile {
   role: Role;
   grade?: string | null;
   avatar_url?: string | null;
+  theme?: string | null;
   created_at: string;
   is_frozen?: boolean;
   frozen_at?: string | null;

@@ -4,8 +4,18 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Star, Target, Map, School, Layers, BookOpen, Sparkles, Mic, PenLine } from "lucide-react";
+import { Star, Target, School, Layers, BookOpen, Sparkles, Mic, PenLine, Flame, Settings } from "lucide-react";
 import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
+import Avatar from "@/app/dashboard/_components/Avatar";
+import { getTheme } from "@/lib/themes";
+import { skillLevel, subjectColor } from "@/lib/analytics/skills";
+
+interface SkillGrowth {
+  subject: string;
+  level: "Learning" | "Practicing" | "Strong";
+  color: string;
+  fill: number; // 0-100, for the growth bar width only (number is never shown)
+}
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -17,6 +27,11 @@ export default function StudentDashboard() {
   const [roadmaps, setRoadmaps] = useState<Record<string, LearningRoadmap>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [lessonsDone, setLessonsDone] = useState(0);
+  const [dayStreak, setDayStreak] = useState(0);
+  const [skills, setSkills] = useState<SkillGrowth[]>([]);
+  const [theme, setTheme] = useState("ocean");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -44,6 +59,8 @@ export default function StudentDashboard() {
         }
 
         setProfile(profileData);
+        setTheme(profileData?.theme ?? "ocean");
+        setAvatarUrl(profileData?.avatar_url ?? null);
 
         // Get their classroom
         const { data: memberData, error: memberError } = await supabase
@@ -106,6 +123,66 @@ export default function StudentDashboard() {
             setRoadmaps(map);
           }
         }
+
+        // ── Progress: lessons done, day streak, and friendly skill growth ────
+        const { data: lessonRows } = await supabase
+          .from("lessons")
+          .select("id, subject, status, completed_at")
+          .eq("student_id", user.id);
+        const lessons = lessonRows ?? [];
+        const subjectById = new Map<string, string | null>(
+          lessons.map((l) => [l.id as string, (l.subject as string | null) ?? null])
+        );
+        const completed = lessons.filter(
+          (l) => l.status === "completed" || l.completed_at != null
+        );
+        setLessonsDone(completed.length);
+
+        const { data: respRows } = await supabase
+          .from("workout_responses")
+          .select("is_correct, lesson_id, created_at")
+          .eq("user_id", user.id);
+        const responses = respRows ?? [];
+
+        // Per-subject accuracy → encouraging growth level (no numbers shown).
+        const bySubject: Record<string, { correct: number; total: number }> = {};
+        responses.forEach((r) => {
+          const subj = r.lesson_id ? subjectById.get(r.lesson_id) ?? null : null;
+          if (!subj) return;
+          if (!bySubject[subj]) bySubject[subj] = { correct: 0, total: 0 };
+          bySubject[subj].total++;
+          if (r.is_correct) bySubject[subj].correct++;
+        });
+        const growth: SkillGrowth[] = Object.entries(bySubject)
+          .map(([subject, v]) => {
+            const pct = v.total > 0 ? Math.round((v.correct / v.total) * 100) : 0;
+            const { level, color } = skillLevel(pct, v.total);
+            return { subject, level, color, fill: Math.max(12, pct) };
+          })
+          .sort((a, b) => b.fill - a.fill);
+        setSkills(growth);
+
+        // Day streak: consecutive days (ending today or yesterday) with activity.
+        const activeDays = new Set<string>();
+        const keyOf = (d: string) => {
+          const dt = new Date(d);
+          return `${dt.getFullYear()}-${dt.getMonth() + 1}-${dt.getDate()}`;
+        };
+        responses.forEach((r) => activeDays.add(keyOf(r.created_at as string)));
+        completed.forEach((l) => {
+          if (l.completed_at) activeDays.add(keyOf(l.completed_at as string));
+        });
+        let streak = 0;
+        const cursor = new Date();
+        // Allow the streak to start today or yesterday.
+        if (!activeDays.has(keyOf(cursor.toISOString()))) {
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        while (activeDays.has(keyOf(cursor.toISOString()))) {
+          streak++;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        setDayStreak(streak);
       } finally {
         setLoading(false);
       }
@@ -129,9 +206,10 @@ export default function StudentDashboard() {
   }
 
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
+  const t = getTheme(theme);
 
   return (
-    <div className="min-h-screen" style={{ background: "#F7F9FC" }}>
+    <div className="min-h-screen" style={{ background: t.pageBg }}>
       {/* Header */}
       <header
         style={{
@@ -174,6 +252,13 @@ export default function StudentDashboard() {
             <Star size={15} color="white" fill="white" aria-hidden="true" />
             <span>{starBalance}</span>
           </div>
+          <Link
+            href="/dashboard/student/settings"
+            aria-label="Settings"
+            style={{ color: "#94A3B8", display: "flex", alignItems: "center" }}
+          >
+            <Settings size={20} aria-hidden="true" />
+          </Link>
           <button
             onClick={handleSignOut}
             style={{
@@ -258,23 +343,34 @@ export default function StudentDashboard() {
         {/* Welcome banner */}
         <div
           style={{
-            background: "linear-gradient(135deg, #028090 0%, #02C39A 100%)",
+            background: `linear-gradient(135deg, ${t.from} 0%, ${t.to} 100%)`,
             borderRadius: "16px",
             padding: "2rem",
             marginBottom: "1.5rem",
             color: "white",
           }}
         >
-          <h1
-            style={{
-              fontFamily: "var(--font-nunito), sans-serif",
-              fontSize: "2rem",
-              fontWeight: 800,
-              marginBottom: "0.5rem",
-            }}
-          >
-            Hey {firstName}!
-          </h1>
+          <div className="flex items-center gap-4" style={{ marginBottom: "0.5rem" }}>
+            <Link href="/dashboard/student/settings" aria-label="Edit your picture and theme">
+              <div style={{ border: "3px solid rgba(255,255,255,0.6)", borderRadius: "50%" }}>
+                <Avatar
+                  userId={profile?.id ?? ""}
+                  name={profile?.full_name}
+                  avatarUrl={avatarUrl}
+                  size={56}
+                />
+              </div>
+            </Link>
+            <h1
+              style={{
+                fontFamily: "var(--font-nunito), sans-serif",
+                fontSize: "2rem",
+                fontWeight: 800,
+              }}
+            >
+              Hey {firstName}!
+            </h1>
+          </div>
           <p style={{ fontSize: "1.125rem", opacity: 0.9 }}>
             Ready to crush your goals today?
           </p>
@@ -297,12 +393,17 @@ export default function StudentDashboard() {
           )}
         </div>
 
-        {/* Stats row */}
+        {/* Stats row — effort & progress, not ranking */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
             { label: "My Stars", value: starBalance, Icon: Star, color: "#D97706" },
-            { label: "My Goals", value: goals.length, Icon: Target, color: "#028090" },
-            { label: "Roadmaps", value: Object.keys(roadmaps).length, Icon: Map, color: "#7C3AED" },
+            { label: "Lessons Done", value: lessonsDone, Icon: BookOpen, color: "#0EA5E9" },
+            {
+              label: dayStreak === 1 ? "Day Streak" : "Day Streak",
+              value: dayStreak,
+              Icon: Flame,
+              color: "#F97316",
+            },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -329,6 +430,72 @@ export default function StudentDashboard() {
             </div>
           ))}
         </div>
+
+        {/* My Skills — encouraging growth, no scores or comparisons */}
+        {skills.length > 0 && (
+          <div className="card mb-6">
+            <h2
+              className="flex items-center gap-2"
+              style={{
+                fontFamily: "var(--font-nunito), sans-serif",
+                fontSize: "1.25rem",
+                fontWeight: 800,
+                color: "#0C2340",
+                marginBottom: "0.25rem",
+              }}
+            >
+              My Skills
+              <Sparkles size={20} color={t.accent} aria-hidden="true" />
+            </h2>
+            <p style={{ fontSize: "0.875rem", color: "#64748B", marginBottom: "1.25rem" }}>
+              Every lesson helps you grow. Keep going to level up!
+            </p>
+            <div className="flex flex-col gap-4">
+              {skills.map((s) => {
+                const sc = subjectColor(s.subject);
+                return (
+                  <div key={s.subject}>
+                    <div className="flex items-center justify-between" style={{ marginBottom: "0.35rem" }}>
+                      <span style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#0C2340" }}>
+                        {s.subject}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 800,
+                          color: s.color,
+                          background: `${s.color}18`,
+                          padding: "0.15rem 0.6rem",
+                          borderRadius: "100px",
+                        }}
+                      >
+                        {s.level}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        height: "12px",
+                        background: "#EEF2F7",
+                        borderRadius: "6px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${s.fill}%`,
+                          background: sc,
+                          borderRadius: "6px",
+                          transition: "width 0.6s ease",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* My Goals */}
         <div className="card mb-6">
