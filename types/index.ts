@@ -166,6 +166,7 @@ export interface Lesson {
   activities: StepActivities;
   star_reward: number;
   content_key: string;
+  passage_key?: string | null;
   status: LessonStatus;
   score_pct: number | null;
   stars_awarded: number;
@@ -180,6 +181,8 @@ export interface StudentSkillTier {
   goal_id: string | null;
   subject: string;
   tier: LessonTier;
+  level?: number | null;
+  lessons_completed?: number;
   win_streak: number;
   loss_streak: number;
   updated_at: string;
@@ -198,6 +201,7 @@ export interface CompleteLessonResult {
   status: "completed" | "failed";
   stars_awarded: number;
   tier: LessonTier;
+  level?: number;
 }
 
 // ─── Phase 12D: Curriculum ingestion ───────────────────────────────────────

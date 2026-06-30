@@ -3,6 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { Volume2, Square } from "lucide-react";
 
+// Build the spoken version of a multiple-choice question: the stem plus each
+// option that actually exists, labeled A, B, C… (never assumes exactly 4, so no
+// "Option D: undefined" is ever read).
+export function questionSpeech(question: string, options: string[] | undefined): string {
+  const opts = (options ?? []).filter((o) => o != null && `${o}`.trim() !== "");
+  const labeled = opts
+    .map((o, i) => `Option ${String.fromCharCode(65 + i)}: ${o}.`)
+    .join(" ");
+  return labeled ? `${question}. ${labeled}` : question;
+}
+
 /**
  * ReadAloud — an accessible "listen" button for MLL students and struggling
  * readers. Uses the browser's built-in Web Speech API (speechSynthesis), so it

@@ -3,25 +3,19 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "crypto";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
-import type { LessonTier, RoadmapQuestion, CurriculumExtract } from "@/types";
+import type { RoadmapQuestion, CurriculumExtract } from "@/types";
+import {
+  gradeToLevel,
+  deriveTier,
+  levelToGradeLabel,
+  QUESTION_PLAN,
+  describeReadingLevel,
+  describeMathLevel,
+  describeSpellingLevel,
+  MAX_LESSON_STARS,
+} from "@/lib/adaptive";
 
 export const dynamic = "force-dynamic";
-
-const TIER_GUIDANCE: Record<LessonTier, string> = {
-  below:
-    "Slightly below grade level — foundational and confidence-building. Scaffold heavily, keep vocabulary simple.",
-  at: "On grade level — matches the student's current grade expectations.",
-  above:
-    "Above grade level — a stretch/challenge. Introduce harder vocabulary and multi-step reasoning.",
-};
-
-// Stronger students get longer lessons (capped at 20). Distribution feeds the
-// adaptive player, which needs questions in each difficulty bucket.
-const QUESTION_PLAN: Record<LessonTier, { total: number; easy: number; medium: number; hard: number }> = {
-  below: { total: 6, easy: 2, medium: 2, hard: 2 },
-  at: { total: 10, easy: 3, medium: 4, hard: 3 },
-  above: { total: 16, easy: 4, medium: 6, hard: 6 },
-};
 
 function isMathSubject(subject: string): boolean {
   return /\bmath/i.test(subject);
@@ -43,9 +37,15 @@ function extractJson(text: string): string {
 
 function buildSystemPrompt(
   plan: { total: number; easy: number; medium: number; hard: number },
-  opts: { math: boolean; spelling: boolean; spellingCurriculum: string | null }
+  opts: {
+    math: boolean;
+    spelling: boolean;
+    spellingCurriculum: string | null;
+    levelGuidance: string;
+    passageWords: string | null;
+  }
 ): string {
-  const { math, spelling, spellingCurriculum } = opts;
+  const { math, spelling, spellingCurriculum, levelGuidance, passageWords } = opts;
   const usePassage = !math && !spelling;
   const passageBlock = usePassage
     ? `  "passage": { "title": "string", "text": "string (the reading passage)" },
@@ -55,21 +55,24 @@ function buildSystemPrompt(
   let contentRules: string;
   if (spelling) {
     contentRules = `- This is a SPELLING lesson: no reading passage. Set "passage" to null.
+- DIFFICULTY (match this level exactly): ${levelGuidance}
 - Each question targets spelling. Vary the formats: choose the correctly spelled word; find the misspelled word; pick the right spelling to complete a sentence; choose the correct plural/past-tense/affixed form. Use the word in a short sentence for context where helpful.
-- Distractors must be realistic misspellings (common errors for the grade), not random.
-- Scale word difficulty to the grade and tier.${
+- Distractors must be realistic misspellings (common errors for this level), not random.${
       spellingCurriculum
-        ? `\n- ALIGN to the teacher's curriculum. Use these spelling words / patterns from the school's curriculum as the basis of the lesson:\n${spellingCurriculum}`
-        : `\n- No curriculum was provided, so build a grade-appropriate spelling lesson at the student's level (grade-level high-frequency words and spelling patterns/word families).`
+        ? `\n- ALIGN to the teacher's curriculum where it fits this level. Use these spelling words / patterns as the basis of the lesson:\n${spellingCurriculum}`
+        : ""
     }`;
   } else if (math) {
-    contentRules = `- This is MATH: no reading passage. Use clear, self-contained word problems and computation questions. Set "passage" to null.`;
+    contentRules = `- This is MATH: no reading passage. Set "passage" to null.
+- DIFFICULTY (match this level exactly): ${levelGuidance}
+- Use clear, self-contained problems appropriate to that level. At the lowest levels keep numbers tiny and concrete; at higher levels use genuine multi-step reasoning.`;
   } else {
-    contentRules = `- Include a "passage": an original, grade-level reading passage (about 200–400 words, scaled to the grade) written in the style of a state standardized test (e.g. NYSTP / state ELA & content-area tests): informational or literary, with a clear main idea, structure, and grade-appropriate academic vocabulary.
-- MOST questions must require reading the passage to answer (main idea, key details, inference, vocabulary-in-context, author's purpose, text structure) — mirroring real state-test items. Quote or reference the passage where natural.`;
+    contentRules = `- Include a "passage": an original reading passage of about ${passageWords}.
+- DIFFICULTY (match this level EXACTLY — this is the most important rule): ${levelGuidance}
+- MOST questions must require reading the passage to answer (main idea, key details, inference, vocabulary-in-context, author's purpose, text structure), pitched to the level above. Quote or reference the passage where natural.`;
   }
 
-  return `You are an expert K-12 teacher and assessment writer creating a single rigorous, engaging lesson for one student. Your questions should mirror the rigor and style of state standardized tests — not easy trivia.
+  return `You are an expert K-12 teacher and assessment writer creating a single lesson for ONE student at a specific ability level. Pitch EVERYTHING — passage, vocabulary, questions, and answer choices — to the difficulty level described below. A struggling reader must get genuinely simple, confidence-building material; an advanced student must be truly challenged.
 
 Return ONLY valid JSON in exactly this format, no other text:
 {
@@ -91,11 +94,11 @@ Rules:
 - Exactly ${plan.total} questions: ${plan.easy} easy, ${plan.medium} medium, ${plan.hard} hard.
 - Multiple choice, exactly 4 options each. Exactly ONE option is correct; the other three are plausible distractors (common misconceptions), not obviously wrong.
 - correct_index is 0-based (0=A, 1=B, 2=C, 3=D) and MUST point to the genuinely correct option. Double-check every answer, especially math computations.
-- Questions should be challenging and test-like — favor reasoning, multi-step problems, and inference over recall.
+- Calibrate rigor to the difficulty level — do NOT make a low-level lesson hard, and do NOT make a high-level lesson easy. The student should be able to pass at roughly 80% when the level is right.
 ${contentRules}
 - Age-appropriate and safe for K-12. No violence, adult themes, or sensitive content.
 - Make it specific and interesting, not generic.
-- Do NOT reproduce any of the topics listed as already-completed.`;
+- Generate a BRAND-NEW passage and brand-new questions every time. Do NOT reuse any passage, topic, or question wording listed as already-seen. (Re-testing a core skill like "main idea" on a NEW passage is fine.)`;
 }
 
 interface GeneratedLesson {
@@ -171,6 +174,14 @@ Be strict about math: actually compute the result.`;
     // If verification fails, don't block the lesson — return originals.
     return questions;
   }
+}
+
+// Stable fingerprint of a passage so the same passage can never be served to a
+// student twice (enforced by the lessons_no_passage_repeat unique index).
+function computePassageKey(passage: { title: string; text: string } | null): string | null {
+  if (!passage || !passage.text) return null;
+  const norm = `${passage.title} ${passage.text}`.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return createHash("sha256").update(norm).digest("hex").slice(0, 32);
 }
 
 function computeContentKey(
@@ -253,15 +264,18 @@ export async function POST(request: Request) {
 
     const source = goalId || roadmapStepId ? "roadmap" : "library";
 
-    // Resolve current tier from persisted skill tier (default 'at').
+    // Resolve the student's continuous difficulty LEVEL for this subject.
+    // First time through (no row) we start at their enrolled grade.
     const { data: tierRow } = await supabase
       .from("student_skill_tiers")
-      .select("tier")
+      .select("level")
       .eq("student_id", studentId)
       .eq("subject", subject)
       .is("goal_id", goalId ?? null)
       .maybeSingle();
-    const tier: LessonTier = (tierRow?.tier as LessonTier) ?? "at";
+    const level: number =
+      tierRow?.level != null ? Number(tierRow.level) : gradeToLevel(grade);
+    const tier = deriveTier(level, grade);
 
     // Retry path: if a failed lesson exists for this subject (+topic), reactivate
     // and return it rather than generating a fresh one.
@@ -286,17 +300,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ lesson: reactivated ?? failed, retry: true });
     }
 
-    // Build the exclusion set: topics/keys the student already has (non-failed).
+    // Build the exclusion set: topics/keys/passages/question-stems the student
+    // already has (non-failed), so nothing repeats. Recent lessons carry the
+    // most weight; cap how much we feed the model.
     const { data: priorLessons } = await supabase
       .from("lessons")
-      .select("topic, content_key")
+      .select("topic, content_key, passage_key, activities, created_at")
       .eq("student_id", studentId)
       .eq("subject", subject)
-      .in("status", ["active", "completed"]);
-    const priorTopics = Array.from(
-      new Set((priorLessons ?? []).map((l) => l.topic))
-    );
+      .in("status", ["active", "completed"])
+      .order("created_at", { ascending: false })
+      .limit(30);
+    const priorTopics = Array.from(new Set((priorLessons ?? []).map((l) => l.topic)));
     const priorKeys = new Set((priorLessons ?? []).map((l) => l.content_key));
+    const priorPassageKeys = new Set(
+      (priorLessons ?? []).map((l) => l.passage_key).filter(Boolean) as string[]
+    );
+
+    // Recent passage titles + question stems for the "do not repeat" instruction.
+    const priorPassageTitles: string[] = [];
+    const priorStems: string[] = [];
+    (priorLessons ?? []).slice(0, 15).forEach((l) => {
+      const acts = l.activities as
+        | { passage?: { title?: string } | null; questions?: { question?: string }[] }
+        | null;
+      const title = acts?.passage?.title;
+      if (title) priorPassageTitles.push(title);
+      (acts?.questions ?? []).forEach((q) => {
+        if (q?.question) priorStems.push(q.question.slice(0, 80));
+      });
+    });
+    const exclusionBlock = [
+      priorTopics.length ? `Topics already done: ${priorTopics.join("; ")}` : "",
+      priorPassageTitles.length
+        ? `Passages already used (write a DIFFERENT one): ${priorPassageTitles.slice(0, 20).join(" | ")}`
+        : "",
+      priorStems.length
+        ? `Question wordings already used (do NOT reuse these exact questions): ${priorStems
+            .slice(0, 30)
+            .join(" | ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -336,22 +382,37 @@ export async function POST(request: Request) {
       }
     }
 
-    const systemPrompt = buildSystemPrompt(plan, { math, spelling, spellingCurriculum });
-
     const usePassage = !math && !spelling;
+    const reading = usePassage ? describeReadingLevel(level) : null;
+    const levelGuidance = math
+      ? describeMathLevel(level)
+      : spelling
+      ? describeSpellingLevel(level)
+      : reading!.guidance;
+    const passageWords = reading?.passageWords ?? null;
+
+    const systemPrompt = buildSystemPrompt(plan, {
+      math,
+      spelling,
+      spellingCurriculum,
+      levelGuidance,
+      passageWords,
+    });
+
     const userMessage = `Subject: ${subject}
-Grade level: ${grade}
-Difficulty tier: ${tier} — ${TIER_GUIDANCE[tier]}
+Student's enrolled grade: ${grade}
+Target difficulty: ${levelToGradeLabel(level)} level (this is the student's measured working level — pitch the whole lesson here, NOT necessarily their enrolled grade).
 ${requestedTopic ? `Requested topic: ${requestedTopic}` : "Topic: you choose a fresh, engaging topic in this subject."}
 ${goalText ? `This lesson should help the student toward their goal: "${goalText}"${goalStandard ? ` (standard ${goalStandard})` : ""}.` : ""}
-Already-completed topics (do NOT repeat any of these): ${priorTopics.length ? priorTopics.join("; ") : "none yet"}
+${exclusionBlock || "Nothing done yet — any fresh topic is fine."}
 
-Write a ${plan.total}-question lesson now${usePassage ? ", including the reading passage" : ""}. Make it as rigorous as a real state test for this grade.`;
+Write a ${plan.total}-question lesson now${usePassage ? ", including the reading passage" : ""}. Match the target difficulty exactly — the student should pass at about 80% when it's right for them.`;
 
-    // Generate, with a couple of retries if we hit a content_key collision.
+    // Generate, retrying on a content_key OR passage_key collision (no repeats).
     let generated: GeneratedLesson | null = null;
     let verifiedQuestions: RoadmapQuestion[] = [];
     let contentKey = "";
+    let passageKey: string | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
@@ -384,10 +445,16 @@ Write a ${plan.total}-question lesson now${usePassage ? ", including the reading
           tier,
           cleanedQuestions
         );
-        if (priorKeys.has(key)) continue; // duplicate — try again
+        if (priorKeys.has(key)) continue; // duplicate question set — try again
+
+        // No passage may repeat for this student.
+        const pKey = computePassageKey(passage);
+        if (pKey && priorPassageKeys.has(pKey)) continue; // seen this passage — retry
+
         generated = parsed;
         verifiedQuestions = cleanedQuestions;
         contentKey = key;
+        passageKey = pKey;
         break;
       } catch {
         continue;
@@ -402,7 +469,9 @@ Write a ${plan.total}-question lesson now${usePassage ? ", including the reading
     }
 
     const topic = generated.topic ?? requestedTopic ?? subject;
-    const starReward = tier === "below" ? 5 : tier === "above" ? 15 : 10;
+    // Stars are now awarded by SCORE at completion (complete_lesson RPC). Store
+    // the max possible (8) for any "earn up to" display.
+    const starReward = MAX_LESSON_STARS;
     const passageOut = usePassage ? generated.passage ?? null : null;
 
     const { data: lesson, error: insertError } = await supabase
@@ -420,6 +489,7 @@ Write a ${plan.total}-question lesson now${usePassage ? ", including the reading
         activities: { questions: verifiedQuestions, passage: passageOut },
         star_reward: starReward,
         content_key: contentKey,
+        passage_key: passageKey,
         status: "active",
       })
       .select()

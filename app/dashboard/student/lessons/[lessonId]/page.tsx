@@ -20,7 +20,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { Profile, Lesson, RoadmapQuestion, LessonTier, CompleteLessonResult } from "@/types";
-import { ReadAloud } from "@/lib/read-aloud";
+import { ReadAloud, questionSpeech } from "@/lib/read-aloud";
 
 type Difficulty = "easy" | "medium" | "hard";
 type GamePhase = "loading" | "playing" | "submitting" | "results";
@@ -807,7 +807,7 @@ export default function LessonPlayerPage() {
                   {currentQ.question}
                 </p>
                 <ReadAloud
-                  text={`${currentQ.question}. Option A: ${currentQ.options[0]}. Option B: ${currentQ.options[1]}. Option C: ${currentQ.options[2]}. Option D: ${currentQ.options[3]}.`}
+                  text={questionSpeech(currentQ.question, currentQ.options)}
                   label=""
                 />
               </div>
@@ -825,7 +825,8 @@ export default function LessonPlayerPage() {
                   }}
                 >
                   <Lightbulb size={18} style={{ flexShrink: 0, marginTop: "1px" }} aria-hidden="true" />
-                  {currentQ.hint}
+                  <span style={{ flex: 1 }}>{currentQ.hint}</span>
+                  <ReadAloud text={currentQ.hint} label="" color="#92400E" />
                 </div>
               )}
             </div>

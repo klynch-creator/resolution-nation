@@ -1,6 +1,7 @@
 "use client";
 
 import type { Lesson, StudentSkillTier, LessonTier } from "@/types";
+import { levelToGradeLabel } from "@/lib/adaptive";
 
 const TIER_BADGE: Record<LessonTier, { label: string; color: string; bg: string }> = {
   below: { label: "Building Up", color: "#0369A1", bg: "#E0F2FE" },
@@ -51,11 +52,11 @@ export default function LessonHistory({
   const totalStars = completed.reduce((sum, l) => sum + (l.stars_awarded ?? 0), 0);
   const subjects = Array.from(new Set(lessons.map((l) => l.subject)));
 
-  // Current tier per subject (prefer a goal-less/library row, else any row).
-  const tierBySubject = new Map<string, LessonTier>();
+  // Current tier + working level per subject (prefer the goal-less/library row).
+  const tierBySubject = new Map<string, { tier: LessonTier; level: number | null }>();
   for (const t of skillTiers) {
     if (!tierBySubject.has(t.subject) || t.goal_id === null) {
-      tierBySubject.set(t.subject, t.tier);
+      tierBySubject.set(t.subject, { tier: t.tier, level: t.level ?? null });
     }
   }
 
@@ -99,9 +100,13 @@ export default function LessonHistory({
           >
             Current Level by Subject
           </h2>
+          <p style={{ fontSize: "0.8125rem", color: "#94A3B8", marginBottom: "1rem" }}>
+            Each student works at their own measured level so they can succeed at ~80%. The
+            grade estimate is the difficulty the lessons are currently pitched to.
+          </p>
           <div className="flex flex-wrap gap-3">
-            {Array.from(tierBySubject.entries()).map(([subject, tier]) => {
-              const badge = TIER_BADGE[tier];
+            {Array.from(tierBySubject.entries()).map(([subject, info]) => {
+              const badge = TIER_BADGE[info.tier];
               return (
                 <div
                   key={subject}
@@ -113,6 +118,11 @@ export default function LessonHistory({
                   }}
                 >
                   <span style={{ fontSize: "0.9375rem", fontWeight: 600, color: "#0C2340" }}>{subject}</span>
+                  {info.level != null && (
+                    <span style={{ fontSize: "0.8125rem", color: "#475569", fontWeight: 600 }}>
+                      ≈ {levelToGradeLabel(info.level)}
+                    </span>
+                  )}
                   <span
                     style={{
                       background: badge.bg,
