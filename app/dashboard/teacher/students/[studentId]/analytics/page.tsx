@@ -7,6 +7,13 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import FluencyAnalyticsCard from "@/app/dashboard/_components/FluencyAnalyticsCard";
+import {
+  computeMathSkills,
+  parseMathDomain,
+  subjectColor,
+  type MathResponse,
+  type SkillBar,
+} from "@/lib/analytics/skills";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,10 +50,30 @@ interface Step {
   status: string;
 }
 
+interface SubjectRow {
+  subject: string;
+  lessonsCompleted: number;
+  questions: number;
+  accuracy: number;
+  stars: number;
+}
+
+interface DayRow {
+  date: string; // YYYY-MM-DD
+  label: string; // e.g. "Mon 6/30"
+  questions: number;
+  accuracy: number;
+  lessons: number;
+  stars: number;
+  subjects: string[];
+}
+
 interface StudentStats {
   name: string;
   grade: string | null;
   accuracy: number;
+  totalQuestions: number;
+  lessonsCompleted: number;
   goalsCompleted: number;
   goalsTotal: number;
   totalStars: number;
@@ -57,6 +84,13 @@ interface StudentStats {
   writing: { pct: number; hasData: boolean };
   fluencyWcpm: number | null;
   fluencyLevel: FluencyLevel | null;
+  // Math promotional skills + CCSS domains.
+  mathCurated: SkillBar[];
+  mathDomains: SkillBar[];
+  mathHasData: boolean;
+  // Daily + subject breakdowns.
+  daily: DayRow[];
+  subjects: SubjectRow[];
 }
 
 const FLUENCY_LEVEL: Record<FluencyLevel, { label: string; color: string; bg: string }> = {
@@ -104,16 +138,45 @@ function last6Weeks(): string[] {
   return weeks;
 }
 
+// Local date key YYYY-MM-DD for grouping by day.
+function dayKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+// Last N day keys, oldest → newest.
+function lastNDays(n: number): string[] {
+  const days: string[] = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push(dayKey(d.toISOString()));
+  }
+  return days;
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function dayLabel(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${WEEKDAYS[date.getDay()]} ${m}/${d}`;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function MiniStatCard({
   label,
   value,
   color,
+  sub,
 }: {
   label: string;
   value: string | number;
   color: string;
+  sub?: string;
 }) {
   return (
     <div className="card" style={{ padding: "1rem 1.25rem", borderLeft: `4px solid ${color}` }}>
@@ -121,7 +184,31 @@ function MiniStatCard({
       <p style={{ fontSize: "1.625rem", fontWeight: 700, color: "#0C2340", lineHeight: 1 }}>
         {value}
       </p>
+      {sub && (
+        <p style={{ fontSize: "0.6875rem", color: "#94A3B8", marginTop: "0.3rem" }}>{sub}</p>
+      )}
     </div>
+  );
+}
+
+// Subject-colored chip.
+function SubjectChip({ subject }: { subject: string }) {
+  const c = subjectColor(subject);
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "0.1rem 0.5rem",
+        borderRadius: "100px",
+        fontSize: "0.6875rem",
+        fontWeight: 700,
+        color: c,
+        background: `${c}18`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {subject}
+    </span>
   );
 }
 
@@ -240,6 +327,105 @@ function WeeklyBarChart({
   );
 }
 
+function DailyActivity({ days }: { days: DayRow[] }) {
+  const active = days.filter((d) => d.questions > 0 || d.lessons > 0 || d.stars > 0);
+  const maxStars = Math.max(1, ...days.map((d) => d.stars));
+
+  if (active.length === 0) {
+    return (
+      <p style={{ color: "#94A3B8", fontSize: "0.9375rem" }}>
+        No activity in the last 14 days.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      {/* Stars-per-day sparkbar across the full 14-day window */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "3px",
+          height: "56px",
+          marginBottom: "1.25rem",
+        }}
+      >
+        {days.map((d) => (
+          <div
+            key={d.date}
+            title={`${d.label}: ${d.stars} stars`}
+            style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}
+          >
+            <div
+              style={{
+                height: `${Math.round((d.stars / maxStars) * 100)}%`,
+                minHeight: d.stars > 0 ? "4px" : "0",
+                background: "#D97706",
+                borderRadius: "3px 3px 0 0",
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Active-day rows */}
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {active
+          .slice()
+          .reverse()
+          .map((d) => (
+            <div
+              key={d.date}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                padding: "0.6rem 0",
+                borderBottom: "1px solid #F1F5F9",
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ width: "72px", fontSize: "0.8125rem", color: "#374151", fontWeight: 600, flexShrink: 0 }}>
+                {d.label}
+              </span>
+              {d.questions > 0 && (
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    padding: "0.1rem 0.5rem",
+                    borderRadius: "100px",
+                    color: d.accuracy >= 80 ? "#028090" : d.accuracy >= 60 ? "#D97706" : "#DC2626",
+                    background:
+                      (d.accuracy >= 80 ? "#028090" : d.accuracy >= 60 ? "#D97706" : "#DC2626") + "18",
+                  }}
+                >
+                  {d.accuracy}% acc
+                </span>
+              )}
+              <span style={{ fontSize: "0.8125rem", color: "#64748B" }}>
+                {d.lessons > 0 && `${d.lessons} lesson${d.lessons !== 1 ? "s" : ""}`}
+                {d.lessons > 0 && d.questions > 0 && " · "}
+                {d.questions > 0 && `${d.questions} q`}
+              </span>
+              {d.stars > 0 && (
+                <span style={{ fontSize: "0.8125rem", color: "#D97706", fontWeight: 700 }}>
+                  +{d.stars} ⭐
+                </span>
+              )}
+              <span style={{ display: "flex", gap: "0.3rem", marginLeft: "auto", flexWrap: "wrap" }}>
+                {d.subjects.map((s) => (
+                  <SubjectChip key={s} subject={s} />
+                ))}
+              </span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StudentAnalyticsPage() {
@@ -286,16 +472,26 @@ export default function StudentAnalyticsPage() {
         .order("created_at", { ascending: true });
       const responses: WorkoutResponse[] = responseData ?? [];
 
-      // Lessons (library + roadmap) so reading/writing lessons feed the skills.
+      // Lessons (library + roadmap) so reading/writing/math lessons feed the
+      // skills, the subject breakdown, and the daily activity feed.
       const { data: lessonData } = await supabase
         .from("lessons")
-        .select("id, subject, topic, title, standard_alignment")
+        .select(
+          "id, subject, topic, title, standard_alignment, status, stars_awarded, completed_at"
+        )
         .eq("student_id", studentId);
+      const lessonRows = lessonData ?? [];
       const lessonMap = new Map(
-        (lessonData ?? []).map((l) => [
+        lessonRows.map((l) => [
           l.id as string,
           `${l.subject ?? ""} ${l.topic ?? ""} ${l.title ?? ""} ${l.standard_alignment ?? ""}`.toLowerCase(),
         ])
+      );
+      const lessonSubject = new Map(
+        lessonRows.map((l) => [l.id as string, (l.subject as string | null) ?? null])
+      );
+      const lessonStandard = new Map(
+        lessonRows.map((l) => [l.id as string, (l.standard_alignment as string | null) ?? null])
       );
 
       // Reading fluency — highest current WCPM + that attempt's level.
@@ -335,13 +531,14 @@ export default function StudentAnalyticsPage() {
         steps = stepsData ?? [];
       }
 
-      // Stars for this student
+      // Stars for this student (with timestamps for the daily feed)
       const { data: starData } = await supabase
         .from("star_transactions")
-        .select("user_id, amount, type")
+        .select("user_id, amount, type, created_at")
         .eq("user_id", studentId)
         .in("type", ["earned", "bonus"]);
-      const totalStars = (starData ?? []).reduce((sum: number, t: { amount: number }) => sum + t.amount, 0);
+      const starRows = (starData ?? []) as { amount: number; created_at: string }[];
+      const totalStars = starRows.reduce((sum, t) => sum + t.amount, 0);
 
       // Step → goal map
       const stepToGoal = new Map<string, string>();
@@ -412,10 +609,130 @@ export default function StudentAnalyticsPage() {
         total: weeklyMap[w].total,
       }));
 
+      // ── Math skills + subject breakdown + daily activity ──────────────────
+      const mathResponses: MathResponse[] = [];
+
+      const days = lastNDays(14);
+      const dayAgg: Record<
+        string,
+        { questions: number; correct: number; lessons: number; stars: number; subjects: Set<string> }
+      > = {};
+      days.forEach(
+        (d) => (dayAgg[d] = { questions: 0, correct: 0, lessons: 0, stars: 0, subjects: new Set() })
+      );
+
+      const subjAgg: Record<
+        string,
+        { lessons: number; questions: number; correct: number; stars: number }
+      > = {};
+      const ensureSubj = (s: string) => {
+        if (!subjAgg[s]) subjAgg[s] = { lessons: 0, questions: 0, correct: 0, stars: 0 };
+        return subjAgg[s];
+      };
+
+      responses.forEach((r) => {
+        let subject: string | null = null;
+        let standard: string | null = null;
+        let text = "";
+        if (r.lesson_id) {
+          subject = lessonSubject.get(r.lesson_id) ?? null;
+          standard = lessonStandard.get(r.lesson_id) ?? null;
+          text = lessonMap.get(r.lesson_id) ?? "";
+        } else if (r.step_id) {
+          const goalId = stepToGoal.get(r.step_id);
+          const goal = goalId ? goalMap.get(goalId) : undefined;
+          if (goal) {
+            subject = goal.subject ?? null;
+            standard = goal.standard_code ?? null;
+            text = (goal.friendly_text + " " + (goal.subject ?? "")).toLowerCase();
+          }
+        }
+
+        const isMath = subject === "Math" || /\bmath\b/.test(text) || parseMathDomain(standard) != null;
+        if (isMath) mathResponses.push({ is_correct: r.is_correct, standard, text });
+
+        if (subject) {
+          const sa = ensureSubj(subject);
+          sa.questions++;
+          if (r.is_correct) sa.correct++;
+        }
+
+        const dk = dayKey(r.created_at);
+        if (dayAgg[dk]) {
+          dayAgg[dk].questions++;
+          if (r.is_correct) dayAgg[dk].correct++;
+          if (subject) dayAgg[dk].subjects.add(subject);
+        }
+      });
+
+      // Completed lessons → subject totals + daily lessons.
+      lessonRows.forEach((l) => {
+        const completed = l.status === "completed" || l.completed_at != null;
+        if (!completed) return;
+        const subject = (l.subject as string | null) ?? null;
+        const stars = (l.stars_awarded as number | null) ?? 0;
+        if (subject) {
+          const sa = ensureSubj(subject);
+          sa.lessons++;
+          sa.stars += stars;
+        }
+        if (l.completed_at) {
+          const dk = dayKey(l.completed_at as string);
+          if (dayAgg[dk]) {
+            dayAgg[dk].lessons++;
+            if (subject) dayAgg[dk].subjects.add(subject);
+          }
+        }
+      });
+
+      // Daily stars come from star_transactions (source of truth across all
+      // activities — lessons, fluency, writing, roadmap steps).
+      starRows.forEach((t) => {
+        const dk = dayKey(t.created_at);
+        if (dayAgg[dk]) dayAgg[dk].stars += t.amount;
+      });
+
+      const mathSkills = computeMathSkills(mathResponses);
+
+      const daily: DayRow[] = days.map((d) => ({
+        date: d,
+        label: dayLabel(d),
+        questions: dayAgg[d].questions,
+        accuracy:
+          dayAgg[d].questions > 0 ? Math.round((dayAgg[d].correct / dayAgg[d].questions) * 100) : 0,
+        lessons: dayAgg[d].lessons,
+        stars: dayAgg[d].stars,
+        subjects: [...dayAgg[d].subjects],
+      }));
+
+      const subjects: SubjectRow[] = Object.entries(subjAgg)
+        .map(([subject, v]) => ({
+          subject,
+          lessonsCompleted: v.lessons,
+          questions: v.questions,
+          accuracy: v.questions > 0 ? Math.round((v.correct / v.questions) * 100) : 0,
+          stars: v.stars,
+        }))
+        .sort(
+          (a, b) =>
+            b.questions + b.lessonsCompleted * 5 - (a.questions + a.lessonsCompleted * 5)
+        );
+
+      const lessonsCompleted = lessonRows.filter(
+        (l) => l.status === "completed" || l.completed_at != null
+      ).length;
+
       const studentStats: StudentStats = {
         name: studentProfile.full_name,
         grade: studentProfile.grade ?? null,
         accuracy: accuracy(responses),
+        totalQuestions: responses.length,
+        lessonsCompleted,
+        mathCurated: mathSkills.curated,
+        mathDomains: mathSkills.domains,
+        mathHasData: mathSkills.totalResponses > 0,
+        daily,
+        subjects,
         goalsCompleted: goals.filter((g) => g.status === "completed").length,
         goalsTotal: goals.length,
         totalStars,
@@ -568,11 +885,18 @@ export default function StudentAnalyticsPage() {
             </div>
 
             {/* Mini stat cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
               <MiniStatCard
                 label="Accuracy"
                 value={`${stats.accuracy}%`}
+                sub={`${stats.totalQuestions} question${stats.totalQuestions !== 1 ? "s" : ""} answered`}
                 color={stats.accuracy >= 80 ? "#028090" : stats.accuracy >= 60 ? "#D97706" : "#DC2626"}
+              />
+              <MiniStatCard
+                label="Lessons Done"
+                value={stats.lessonsCompleted}
+                sub="completed"
+                color="#0EA5E9"
               />
               <MiniStatCard
                 label="Goals Completed"
@@ -582,11 +906,13 @@ export default function StudentAnalyticsPage() {
               <MiniStatCard
                 label="Stars Earned"
                 value={stats.totalStars}
+                sub="all time"
                 color="#D97706"
               />
               <MiniStatCard
                 label="Adaptive Level"
                 value={stats.adaptiveLevel}
+                sub="last 10 responses"
                 color={levelColor}
               />
             </div>
@@ -683,6 +1009,178 @@ export default function StudentAnalyticsPage() {
                 </h2>
                 <WeeklyBarChart weeks={stats.weeklyAccuracy} />
               </div>
+            </div>
+
+            {/* Math Skills */}
+            <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
+              <h2
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "1.0625rem",
+                  fontWeight: 700,
+                  color: "#0C2340",
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Math Skills
+              </h2>
+              <p style={{ fontSize: "0.8125rem", color: "#94A3B8", marginBottom: "1.25rem" }}>
+                Promotional skills first, then a full CCSS-domain breakdown. Scored from completed
+                math lessons and roadmap steps.
+              </p>
+
+              {!stats.mathHasData ? (
+                <p style={{ color: "#94A3B8", fontSize: "0.9375rem" }}>
+                  No math data yet. Completed math lessons and roadmap steps will show here.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+                  <div>
+                    <p
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0C2340",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        marginBottom: "0.875rem",
+                      }}
+                    >
+                      Key promotional skills
+                    </p>
+                    <HBarChart
+                      bars={stats.mathCurated.map((b) => ({
+                        label: b.label,
+                        pct: b.pct,
+                        hasData: b.hasData,
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <p
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0C2340",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        marginBottom: "0.875rem",
+                      }}
+                    >
+                      By CCSS domain
+                    </p>
+                    {stats.mathDomains.length === 0 ? (
+                      <p style={{ color: "#94A3B8", fontSize: "0.875rem" }}>
+                        No standards-tagged math activity yet.
+                      </p>
+                    ) : (
+                      <HBarChart
+                        bars={stats.mathDomains.map((b) => ({
+                          label: b.label,
+                          pct: b.pct,
+                          hasData: b.hasData,
+                        }))}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Subject Breakdown */}
+            <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
+              <h2
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "1.0625rem",
+                  fontWeight: 700,
+                  color: "#0C2340",
+                  marginBottom: "1.25rem",
+                }}
+              >
+                By Subject
+              </h2>
+              {stats.subjects.length === 0 ? (
+                <p style={{ color: "#94A3B8", fontSize: "0.9375rem" }}>
+                  No subject activity yet.
+                </p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #E2E8F0", textAlign: "left" }}>
+                        <th style={{ padding: "0.5rem 0.75rem 0.5rem 0", color: "#64748B", fontWeight: 600 }}>
+                          Subject
+                        </th>
+                        <th style={{ padding: "0.5rem 0.75rem", color: "#64748B", fontWeight: 600, textAlign: "right" }}>
+                          Lessons
+                        </th>
+                        <th style={{ padding: "0.5rem 0.75rem", color: "#64748B", fontWeight: 600, textAlign: "right" }}>
+                          Questions
+                        </th>
+                        <th style={{ padding: "0.5rem 0.75rem", color: "#64748B", fontWeight: 600, textAlign: "right" }}>
+                          Accuracy
+                        </th>
+                        <th style={{ padding: "0.5rem 0 0.5rem 0.75rem", color: "#64748B", fontWeight: 600, textAlign: "right" }}>
+                          Stars
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.subjects.map((s) => (
+                        <tr key={s.subject} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.6rem 0.75rem 0.6rem 0" }}>
+                            <SubjectChip subject={s.subject} />
+                          </td>
+                          <td style={{ padding: "0.6rem 0.75rem", textAlign: "right", color: "#374151" }}>
+                            {s.lessonsCompleted}
+                          </td>
+                          <td style={{ padding: "0.6rem 0.75rem", textAlign: "right", color: "#374151" }}>
+                            {s.questions}
+                          </td>
+                          <td style={{ padding: "0.6rem 0.75rem", textAlign: "right" }}>
+                            {s.questions > 0 ? (
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color:
+                                    s.accuracy >= 80 ? "#028090" : s.accuracy >= 60 ? "#D97706" : "#DC2626",
+                                }}
+                              >
+                                {s.accuracy}%
+                              </span>
+                            ) : (
+                              <span style={{ color: "#CBD5E1" }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.6rem 0 0.6rem 0.75rem", textAlign: "right", color: "#D97706", fontWeight: 700 }}>
+                            {s.stars}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Daily Activity */}
+            <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
+              <h2
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "1.0625rem",
+                  fontWeight: 700,
+                  color: "#0C2340",
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Daily Activity
+              </h2>
+              <p style={{ fontSize: "0.8125rem", color: "#94A3B8", marginBottom: "1.25rem" }}>
+                Last 14 days · accuracy, lessons, and stars per day with subjects worked.
+              </p>
+              <DailyActivity days={stats.daily} />
             </div>
 
             {/* AI Insight */}

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { computeMathSkills, parseMathDomain, type MathResponse } from "@/lib/analytics/skills";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -521,6 +522,8 @@ export default function TeacherAnalyticsPage() {
       `${l.subject ?? ""} ${l.topic ?? ""} ${l.title ?? ""} ${l.standard_alignment ?? ""}`.toLowerCase(),
     ])
   );
+  const lessonSubjectMap = new Map(lessons.map((l) => [l.id, l.subject ?? null]));
+  const lessonStandardMap = new Map(lessons.map((l) => [l.id, l.standard_alignment ?? null]));
   const skillStats = {
     Comprehension: { correct: 0, total: 0 },
     Writing: { correct: 0, total: 0 },
@@ -553,6 +556,30 @@ export default function TeacherAnalyticsPage() {
         : 0,
     hasData: skillStats[skill].total > 0,
   }));
+
+  // Class-wide math skills (curated promotional + CCSS domains).
+  const mathResponses: MathResponse[] = [];
+  responses.forEach((r) => {
+    let subject: string | null = null;
+    let standard: string | null = null;
+    let text = "";
+    if (r.lesson_id) {
+      subject = lessonSubjectMap.get(r.lesson_id) ?? null;
+      standard = lessonStandardMap.get(r.lesson_id) ?? null;
+      text = lessonTextMap.get(r.lesson_id) ?? "";
+    } else if (r.step_id) {
+      const goalId = stepToGoal.get(r.step_id);
+      const goal = goalId ? goalMap.get(goalId) : undefined;
+      if (goal) {
+        subject = goal.subject ?? null;
+        standard = goal.standard_code ?? null;
+        text = (goal.friendly_text + " " + (goal.subject ?? "")).toLowerCase();
+      }
+    }
+    const isMath = subject === "Math" || /\bmath\b/.test(text) || parseMathDomain(standard) != null;
+    if (isMath) mathResponses.push({ is_correct: r.is_correct, standard, text });
+  });
+  const mathSkills = computeMathSkills(mathResponses);
 
   // Class fluency: average of each student's best WCPM.
   const classAvgWcpm =
@@ -869,6 +896,70 @@ export default function TeacherAnalyticsPage() {
                   </>
                 )}
               </div>
+            </div>
+
+            {/* Math Skills Breakdown (class-wide) */}
+            <div className="card" style={{ padding: "1.5rem", marginTop: "1.5rem" }}>
+              <h2
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "1.125rem",
+                  fontWeight: 700,
+                  color: "#0C2340",
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Math Skills Breakdown
+              </h2>
+              <p style={{ fontSize: "0.8125rem", color: "#94A3B8", marginBottom: "1.25rem" }}>
+                Class-wide. Key promotional skills first, then a full CCSS-domain breakdown.
+              </p>
+              {loading ? (
+                <div style={{ height: "120px", background: "#F1F5F9", borderRadius: "8px" }} />
+              ) : mathSkills.totalResponses === 0 ? (
+                <p style={{ color: "#94A3B8", fontSize: "0.9375rem" }}>
+                  No math data yet. Completed math lessons and roadmap steps will show here.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+                  <div>
+                    <p
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0C2340",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        marginBottom: "0.875rem",
+                      }}
+                    >
+                      Key promotional skills
+                    </p>
+                    <HBarChart bars={mathSkills.curated} />
+                  </div>
+                  <div>
+                    <p
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0C2340",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        marginBottom: "0.875rem",
+                      }}
+                    >
+                      By CCSS domain
+                    </p>
+                    {mathSkills.domains.length === 0 ? (
+                      <p style={{ color: "#94A3B8", fontSize: "0.875rem" }}>
+                        No standards-tagged math activity yet.
+                      </p>
+                    ) : (
+                      <HBarChart bars={mathSkills.domains} />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
