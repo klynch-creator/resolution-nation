@@ -9,16 +9,23 @@ import { ReadAloud } from "@/lib/read-aloud";
 import { WritingTextarea } from "@/lib/writing-textarea";
 import type { PasteEvent } from "@/types";
 
+interface PromptSupport {
+  stems: string[];
+  structure: string;
+}
 interface Assignment {
   assignmentId: string;
   passage: { title: string; text: string };
   prompts: string[];
+  supports?: (PromptSupport | null)[] | null;
+  scaffold?: boolean;
   standard_alignment: string | null;
   rubric_max: number;
 }
 interface GradeResult {
   score: number;
   rubric_max: number;
+  stars_awarded?: number;
   strengths: string;
   feedback: string;
   improvement: string;
@@ -116,7 +123,7 @@ export default function ShortResponsePage() {
             <FileText size={40} color="#028090" aria-hidden="true" style={{ margin: "0 auto 1rem" }} />
             <h1 style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0C2340", marginBottom: "0.5rem" }}>Short Response Practice</h1>
             <p style={{ color: "#64748B", marginBottom: "1.5rem" }}>
-              You&apos;ll read a passage and answer 2 questions using text evidence — just like a state test. Use RACE/RADD: Restate, Answer, Cite evidence, Explain.
+              You&apos;ll read a passage and answer questions using text evidence — just like a state test. Use RACE/RADD: Restate, Answer, Cite evidence, Explain.
             </p>
             <button onClick={generate} className="btn-primary flex items-center justify-center gap-2" style={{ margin: "0 auto" }}>
               <Sparkles size={16} aria-hidden="true" /> Generate a passage
@@ -147,10 +154,18 @@ export default function ShortResponsePage() {
               const result = results[i];
               return (
                 <div key={i} className="card" style={{ padding: "1.5rem", marginBottom: "1.25rem" }}>
-                  <div className="flex items-start gap-2" style={{ marginBottom: "0.75rem" }}>
-                    <span style={{ fontWeight: 800, color: "#7C3AED" }}>Q{i + 1}.</span>
-                    <p style={{ fontWeight: 700, color: "#0C2340", lineHeight: 1.5 }}>{p}</p>
+                  <div className="flex items-start justify-between gap-2" style={{ marginBottom: "0.75rem" }}>
+                    <div className="flex items-start gap-2">
+                      <span style={{ fontWeight: 800, color: "#7C3AED" }}>Q{i + 1}.</span>
+                      <p style={{ fontWeight: 700, color: "#0C2340", lineHeight: 1.5 }}>{p}</p>
+                    </div>
+                    <ReadAloud text={p} label="" color="#7C3AED" />
                   </div>
+
+                  {/* Sentence stems + structure reminder for emerging writers */}
+                  {!result && a.supports?.[i] && (
+                    <WritingSupport support={a.supports[i]!} />
+                  )}
 
                   {!result ? (
                     <>
@@ -190,16 +205,58 @@ export default function ShortResponsePage() {
   );
 }
 
+// Sentence stems + structure reminder shown to emerging writers.
+function WritingSupport({ support }: { support: PromptSupport }) {
+  return (
+    <div
+      style={{
+        background: "#EFF6FF",
+        border: "1px solid #BFDBFE",
+        borderRadius: "10px",
+        padding: "0.875rem 1rem",
+        marginBottom: "0.875rem",
+      }}
+    >
+      <div className="flex items-center gap-2" style={{ marginBottom: "0.5rem" }}>
+        <Lightbulb size={16} color="#2563EB" aria-hidden="true" />
+        <span style={{ fontWeight: 800, color: "#1E3A8A", fontSize: "0.875rem" }}>Helpers</span>
+        <ReadAloud
+          text={`How to organize: ${support.structure}. Sentence starters: ${support.stems.join(". ")}`}
+          label=""
+          color="#2563EB"
+        />
+      </div>
+      {support.structure && (
+        <p style={{ color: "#1E40AF", fontSize: "0.875rem", marginBottom: support.stems.length ? "0.5rem" : 0, lineHeight: 1.5 }}>
+          {support.structure}
+        </p>
+      )}
+      {support.stems.length > 0 && (
+        <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "#1E40AF", fontSize: "0.875rem", lineHeight: 1.7 }}>
+          {support.stems.map((s, idx) => (
+            <li key={idx}>{s}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function FeedbackCard({ result, response }: { result: GradeResult; response: string }) {
   return (
     <div>
       <div style={{ background: "#F8FAFC", borderRadius: "10px", padding: "0.875rem 1rem", marginBottom: "0.875rem", whiteSpace: "pre-wrap", color: "#0C2340" }}>
         {response}
       </div>
-      <div className="flex items-center gap-2" style={{ marginBottom: "0.75rem" }}>
+      <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: "0.75rem" }}>
         <span className="flex items-center gap-1" style={{ background: "#ECFDF5", color: "#059669", borderRadius: "100px", padding: "0.25rem 0.75rem", fontWeight: 800 }}>
-          <Star size={14} color="#059669" fill="#059669" aria-hidden="true" /> {result.score} / {result.rubric_max}
+          <Check size={14} color="#059669" aria-hidden="true" /> {result.score} / {result.rubric_max}
         </span>
+        {result.stars_awarded != null && result.stars_awarded > 0 && (
+          <span className="flex items-center gap-1" style={{ background: "#FEF3C7", color: "#B45309", borderRadius: "100px", padding: "0.25rem 0.75rem", fontWeight: 800 }}>
+            <Star size={14} color="#D97706" fill="#D97706" aria-hidden="true" /> +{result.stars_awarded} stars
+          </span>
+        )}
         {result.paste_flagged && (
           <span style={{ background: "#FEF3C7", color: "#B45309", borderRadius: "100px", padding: "0.2rem 0.6rem", fontSize: "0.75rem", fontWeight: 700 }}>
             paste detected

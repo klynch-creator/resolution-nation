@@ -9,16 +9,23 @@ import { ReadAloud } from "@/lib/read-aloud";
 import { WritingTextarea } from "@/lib/writing-textarea";
 import type { PasteEvent } from "@/types";
 
+interface PromptSupport {
+  stems: string[];
+  structure: string;
+}
 interface Assignment {
   assignmentId: string;
   passage: { title: string; text: string };
   prompts: string[];
+  supports?: (PromptSupport | null)[] | null;
+  scaffold?: boolean;
   standard_alignment: string | null;
   rubric_max: number;
 }
 interface GradeResult {
   score: number;
   rubric_max: number;
+  stars_awarded?: number;
   strengths: string;
   feedback: string;
   improvement: string;
@@ -112,8 +119,36 @@ export default function EssayPage() {
             </div>
 
             <div className="card" style={{ padding: "1.5rem", marginBottom: "1.25rem", background: "#FAF5FF" }}>
-              <span style={{ fontWeight: 800, color: "#6D28D9" }}>Your prompt</span>
+              <div className="flex items-center justify-between gap-2">
+                <span style={{ fontWeight: 800, color: "#6D28D9" }}>Your prompt</span>
+                <ReadAloud text={a.prompts[0]} label="" color="#7C3AED" />
+              </div>
               <p style={{ color: "#0C2340", lineHeight: 1.6, marginTop: "0.375rem" }}>{a.prompts[0]}</p>
+              {a.supports?.[0] && !result && (
+                <div style={{ marginTop: "0.875rem", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "10px", padding: "0.875rem 1rem" }}>
+                  <div className="flex items-center gap-2" style={{ marginBottom: "0.5rem" }}>
+                    <Lightbulb size={16} color="#2563EB" aria-hidden="true" />
+                    <span style={{ fontWeight: 800, color: "#1E3A8A", fontSize: "0.875rem" }}>Helpers</span>
+                    <ReadAloud
+                      text={`How to organize: ${a.supports[0]!.structure}. Sentence starters: ${a.supports[0]!.stems.join(". ")}`}
+                      label=""
+                      color="#2563EB"
+                    />
+                  </div>
+                  {a.supports[0]!.structure && (
+                    <p style={{ color: "#1E40AF", fontSize: "0.875rem", marginBottom: a.supports[0]!.stems.length ? "0.5rem" : 0, lineHeight: 1.5 }}>
+                      {a.supports[0]!.structure}
+                    </p>
+                  )}
+                  {a.supports[0]!.stems.length > 0 && (
+                    <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "#1E40AF", fontSize: "0.875rem", lineHeight: 1.7 }}>
+                      {a.supports[0]!.stems.map((s, idx) => (
+                        <li key={idx}>{s}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
 
             {!result ? (
@@ -141,10 +176,15 @@ export default function EssayPage() {
               </div>
             ) : (
               <div className="card" style={{ padding: "1.5rem" }}>
-                <div className="flex items-center gap-2" style={{ marginBottom: "0.75rem" }}>
+                <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: "0.75rem" }}>
                   <span className="flex items-center gap-1" style={{ background: "#ECFDF5", color: "#059669", borderRadius: "100px", padding: "0.25rem 0.875rem", fontWeight: 800, fontSize: "1rem" }}>
-                    <Star size={15} color="#059669" fill="#059669" aria-hidden="true" /> {result.score} / {result.rubric_max}
+                    <Check size={15} color="#059669" aria-hidden="true" /> {result.score} / {result.rubric_max}
                   </span>
+                  {result.stars_awarded != null && result.stars_awarded > 0 && (
+                    <span className="flex items-center gap-1" style={{ background: "#FEF3C7", color: "#B45309", borderRadius: "100px", padding: "0.25rem 0.875rem", fontWeight: 800, fontSize: "1rem" }}>
+                      <Star size={15} color="#D97706" fill="#D97706" aria-hidden="true" /> +{result.stars_awarded} stars
+                    </span>
+                  )}
                   {result.paste_flagged && (
                     <span style={{ background: "#FEF3C7", color: "#B45309", borderRadius: "100px", padding: "0.2rem 0.6rem", fontSize: "0.75rem", fontWeight: 700 }}>paste detected</span>
                   )}

@@ -93,6 +93,38 @@ export function levelDelta(scorePct: number, lessonsCompleted: number): number {
   return d * (calibrating ? 1.75 : 1);
 }
 
+// Apply a level nudge after a graded task. `damp` lets callers soften the move
+// (e.g. writing grades each prompt separately, so we dampen per-submission).
+export function nextLevel(
+  current: number,
+  scorePct: number,
+  lessonsCompleted: number,
+  damp = 1
+): number {
+  return clampLevel(current + levelDelta(scorePct, lessonsCompleted) * damp);
+}
+
+// Stars for a graded WRITING response. Short response is a 0–2 rubric
+// (2→5, 1→3, 0→1). Essay is a 0–4 rubric, scaled up since it's one big task.
+export function writingStars(rubricMax: number, score: number): number {
+  const s = Math.max(0, Math.min(rubricMax, Math.round(score)));
+  if (rubricMax <= 2) return s >= 2 ? 5 : s === 1 ? 3 : 1;
+  return [1, 3, 5, 8, 10][Math.max(0, Math.min(4, s))];
+}
+
+// How many short-response prompts to give at this level (more for stronger
+// writers; struggling writers get a single focused prompt).
+export function shortResponseCount(level: number): number {
+  if (level < 2) return 1;
+  if (level < 6) return 2;
+  return 3;
+}
+
+// Lower-level writers get sentence stems + structure reminders.
+export function needsWritingScaffold(level: number, grade: string | null | undefined): boolean {
+  return level < 4 || deriveTier(level, grade) === "below";
+}
+
 // ── Difficulty descriptions fed to the generator ──────────────────────────────
 // These translate a numeric level into concrete, level-true guidance so the AI
 // produces genuinely Kindergarten/phonics content at the low end and genuinely

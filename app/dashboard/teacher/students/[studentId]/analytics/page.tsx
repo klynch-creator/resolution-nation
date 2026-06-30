@@ -14,6 +14,7 @@ import {
   type MathResponse,
   type SkillBar,
 } from "@/lib/analytics/skills";
+import { levelToGradeLabel } from "@/lib/adaptive";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,8 @@ interface StudentStats {
   mathCurated: SkillBar[];
   mathDomains: SkillBar[];
   mathHasData: boolean;
+  // Adaptive working level per subject (grade-equivalent).
+  levels: { subject: string; level: number; tier: string }[];
   // Daily + subject breakdowns.
   daily: DayRow[];
   subjects: SubjectRow[];
@@ -531,6 +534,25 @@ export default function StudentAnalyticsPage() {
         steps = stepsData ?? [];
       }
 
+      // Adaptive working level per subject (prefer the goal-less/library row).
+      const { data: tierData } = await supabase
+        .from("student_skill_tiers")
+        .select("subject, tier, level, goal_id")
+        .eq("student_id", studentId);
+      const levelBySubject = new Map<string, { subject: string; level: number; tier: string }>();
+      (tierData ?? []).forEach((t) => {
+        if (t.level == null) return;
+        const existing = levelBySubject.get(t.subject);
+        if (!existing || t.goal_id === null) {
+          levelBySubject.set(t.subject, {
+            subject: t.subject,
+            level: Number(t.level),
+            tier: t.tier,
+          });
+        }
+      });
+      const levels = [...levelBySubject.values()].sort((a, b) => a.subject.localeCompare(b.subject));
+
       // Stars for this student (with timestamps for the daily feed)
       const { data: starData } = await supabase
         .from("star_transactions")
@@ -731,6 +753,7 @@ export default function StudentAnalyticsPage() {
         mathCurated: mathSkills.curated,
         mathDomains: mathSkills.domains,
         mathHasData: mathSkills.totalResponses > 0,
+        levels,
         daily,
         subjects,
         goalsCompleted: goals.filter((g) => g.status === "completed").length,
@@ -916,6 +939,58 @@ export default function StudentAnalyticsPage() {
                 color={levelColor}
               />
             </div>
+
+            {/* Adaptive working level per subject */}
+            {stats.levels.length > 0 && (
+              <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
+                <h2
+                  style={{
+                    fontFamily: "Georgia, serif",
+                    fontSize: "1.0625rem",
+                    fontWeight: 700,
+                    color: "#0C2340",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Working Level by Subject
+                </h2>
+                <p style={{ fontSize: "0.8125rem", color: "#94A3B8", marginBottom: "1.25rem" }}>
+                  Where the adaptive engine is currently pitching each subject so {stats.name.split(" ")[0]} succeeds at ~80%. Hidden from students.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {stats.levels.map((lv) => {
+                    const c =
+                      lv.tier === "above" ? "#7C3AED" : lv.tier === "below" ? "#0369A1" : "#047857";
+                    const label =
+                      lv.tier === "above" ? "Challenge" : lv.tier === "below" ? "Building Up" : "On Level";
+                    return (
+                      <div
+                        key={lv.subject}
+                        className="flex items-center gap-2"
+                        style={{ border: "1px solid #E2E8F0", borderRadius: "10px", padding: "0.5rem 0.875rem" }}
+                      >
+                        <SubjectChip subject={lv.subject} />
+                        <span style={{ fontSize: "0.875rem", color: "#374151", fontWeight: 700 }}>
+                          ≈ {levelToGradeLabel(lv.level)}
+                        </span>
+                        <span
+                          style={{
+                            background: `${c}18`,
+                            color: c,
+                            fontSize: "0.6875rem",
+                            fontWeight: 700,
+                            padding: "0.125rem 0.5rem",
+                            borderRadius: "100px",
+                          }}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Reading fluency (read-aloud) summary + link to full report */}
             <FluencyAnalyticsCard studentId={studentId} />

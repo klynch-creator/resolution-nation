@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { getAdmin, moderate, applyModeration, extractJson } from "@/lib/writing-moderation";
+import { gradeToLevel, deriveTier, nextLevel, writingStars } from "@/lib/adaptive";
 import type { PasteEvent } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -164,10 +165,60 @@ Score it now.`;
       })
       .eq("id", inserted.id);
 
+    // 4. Award stars by rubric (idempotent per submission), then nudge the
+    //    student's adaptive Writing level toward the ~80% target band.
+    let starsAwarded = writingStars(rubricMax, grade.score);
+    const { data: priorStar } = await admin
+      .from("star_transactions")
+      .select("id")
+      .eq("type", "earned")
+      .eq("item_id", inserted.id)
+      .limit(1);
+    if (priorStar && priorStar.length > 0) {
+      starsAwarded = 0;
+    } else {
+      await admin
+        .from("star_transactions")
+        .insert({ user_id: user.id, amount: starsAwarded, type: "earned", item_id: inserted.id });
+    }
+
+    // Adaptive level update for Writing (dampened — each prompt grades separately).
+    const scorePct = rubricMax > 0 ? (grade.score / rubricMax) * 100 : 0;
+    const { data: wTier } = await admin
+      .from("student_skill_tiers")
+      .select("level, lessons_completed")
+      .eq("student_id", user.id)
+      .eq("subject", "Writing")
+      .is("goal_id", null)
+      .maybeSingle();
+    const curLevel =
+      wTier?.level != null ? Number(wTier.level) : gradeToLevel(profile?.grade ?? null);
+    const done = wTier?.lessons_completed ?? 0;
+    const newLevel = nextLevel(curLevel, scorePct, done, 0.5);
+    const newTier = deriveTier(newLevel, profile?.grade ?? null);
+    if (wTier) {
+      await admin
+        .from("student_skill_tiers")
+        .update({ level: newLevel, tier: newTier, lessons_completed: done + 1, updated_at: new Date().toISOString() })
+        .eq("student_id", user.id)
+        .eq("subject", "Writing")
+        .is("goal_id", null);
+    } else {
+      await admin.from("student_skill_tiers").insert({
+        student_id: user.id,
+        goal_id: null,
+        subject: "Writing",
+        tier: newTier,
+        level: newLevel,
+        lessons_completed: 1,
+      });
+    }
+
     return NextResponse.json({
       submissionId: inserted.id,
       score: grade.score,
       rubric_max: rubricMax,
+      stars_awarded: starsAwarded,
       strengths: grade.strengths,
       feedback: grade.feedback,
       improvement: grade.improvement,

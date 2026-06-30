@@ -4,13 +4,26 @@ import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { extractJson } from "@/lib/writing-moderation";
+import {
+  gradeToLevel,
+  deriveTier,
+  levelToGradeLabel,
+  describeReadingLevel,
+  shortResponseCount,
+  needsWritingScaffold,
+} from "@/lib/adaptive";
 
 export const dynamic = "force-dynamic";
 
+interface PromptSupport {
+  stems: string[];
+  structure: string;
+}
 interface GenResult {
   passage: { title: string; text: string };
   standard_alignment: string | null;
   prompts: string[];
+  supports?: (PromptSupport | null)[] | null;
 }
 
 export async function POST(request: Request) {
@@ -42,42 +55,51 @@ export async function POST(request: Request) {
     }
     const grade = profile?.grade ?? "not specified";
 
-    // Difficulty tier (persisted) for Writing, default 'at'.
+    // Continuous WRITING level (init from enrolled grade the first time).
     const { data: tierRow } = await supabase
       .from("student_skill_tiers")
-      .select("tier")
+      .select("level")
       .eq("student_id", user.id)
       .eq("subject", "Writing")
       .is("goal_id", null)
       .maybeSingle();
-    const tier = (tierRow?.tier as string) ?? "at";
+    const level: number = tierRow?.level != null ? Number(tierRow.level) : gradeToLevel(grade);
+    const tier = deriveTier(level, grade);
+    const reading = describeReadingLevel(level);
+    const scaffold = needsWritingScaffold(level, grade);
+    const promptCount = mode === "short_response" ? shortResponseCount(level) : 1;
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
-    const shortRules = `Produce a "short_response" set:
-- One original, grade-level reading passage (~250–400 words, scaled to the grade) in the style of a state ELA test (e.g. NYSTP): informational or literary, clear main idea and structure, grade-appropriate academic vocabulary.
-- 2 short-response questions that require text evidence and follow the RACE/RADD structure (Restate, Answer, Cite evidence, Explain). These should mirror real state-test short-response items.`;
-    const essayRules = `Produce an "essay" set:
-- One original, grade-level reading passage (~350–500 words, scaled to the grade) in the style of a state ELA test.
-- Exactly 1 essay prompt tied to the passage (argument, informational/explanatory, OR narrative as fits the grade), phrased like a state extended-response task. Ask the student to use evidence from the passage and organize a multi-paragraph response.`;
+    const supportRule = scaffold
+      ? `\n- The student is an EMERGING/struggling writer. For EACH prompt also provide "supports": { "stems": [2–4 sentence starters the student can copy and finish, e.g. "The passage is mostly about ___" , "One detail that shows this is ___"], "structure": "a one-sentence, kid-friendly reminder of how to organize the answer (Restate, Answer, Cite evidence, Explain)" }. Keep stems at the student's level: ${reading.guidance}`
+      : `\n- The student does NOT need scaffolds. Set "supports" to null.`;
 
-    const system = `You are an expert K-12 ELA teacher and state-assessment item writer. Create rigorous, on-grade writing practice that mirrors state tests.
+    const shortRules = `Produce a "short_response" set:
+- One original reading passage of about ${reading.passageWords}, in the style of a state ELA test. DIFFICULTY (match exactly): ${reading.guidance}
+- Exactly ${promptCount} short-response question${promptCount > 1 ? "s" : ""} that require text evidence and follow RACE/RADD (Restate, Answer, Cite evidence, Explain), pitched to the level above.${supportRule}`;
+    const essayRules = `Produce an "essay" set:
+- One original reading passage of about ${reading.passageWords}, in the style of a state ELA test. DIFFICULTY (match exactly): ${reading.guidance}
+- Exactly 1 essay prompt tied to the passage (argument, informational/explanatory, OR narrative as fits the level), phrased like a state extended-response task. Use evidence from the passage.${supportRule}`;
+
+    const system = `You are an expert K-12 ELA teacher and assessment item writer. Pitch the passage, prompts, and vocabulary to the difficulty level described — a struggling writer must get genuinely simple, supportive material; an advanced writer must be challenged.
 
 Return ONLY valid JSON, no other text:
 {
   "passage": { "title": "string", "text": "string" },
   "standard_alignment": "string (e.g. W.4.1 / RI.4.1) or null",
-  "prompts": ["string", ...]
+  "prompts": ["string", ...],
+  "supports": [ { "stems": ["string"], "structure": "string" } ] or null
 }
 
 ${mode === "short_response" ? shortRules : essayRules}
+- If "supports" is provided, it MUST be an array parallel to "prompts" (one entry per prompt, same order).
 - Age-appropriate and safe for K-12.`;
 
-    const userMsg = `Grade level: ${grade}
-Writing difficulty tier: ${tier}
+    const userMsg = `Target writing level: ${levelToGradeLabel(level)} (the student's measured level — pitch here, not necessarily their enrolled grade ${grade}).
 ${topic ? `Preferred theme/topic: ${topic}` : "Choose an engaging, fresh topic."}
 
-Generate the ${mode === "short_response" ? "passage and 2 short-response questions" : "passage and 1 essay prompt"} now.`;
+Generate the passage and ${promptCount} ${mode === "short_response" ? "short-response question(s)" : "essay prompt"} now${scaffold ? ", including supports for each prompt" : ""}.`;
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -103,14 +125,25 @@ Generate the ${mode === "short_response" ? "passage and 2 short-response questio
       return NextResponse.json({ error: "Incomplete generation. Please try again." }, { status: 500 });
     }
 
+    const maxPrompts = mode === "short_response" ? promptCount : 1;
+    const prompts = gen.prompts.slice(0, maxPrompts);
+    const supports =
+      scaffold && Array.isArray(gen.supports)
+        ? prompts.map((_, i) => gen.supports?.[i] ?? null)
+        : null;
+
     return NextResponse.json({
       assignmentId: randomUUID(),
       mode,
       passage: gen.passage,
-      prompts: gen.prompts.slice(0, mode === "short_response" ? 3 : 1),
+      prompts,
+      supports,
+      scaffold,
       standard_alignment: gen.standard_alignment ?? null,
       rubric_max: mode === "short_response" ? 2 : 4,
       tier,
+      level,
+      gradeLabel: levelToGradeLabel(level),
       grade,
     });
   } catch (err) {
