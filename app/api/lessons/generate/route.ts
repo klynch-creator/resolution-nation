@@ -14,6 +14,7 @@ import {
   describeSpellingLevel,
   MAX_LESSON_STARS,
 } from "@/lib/adaptive";
+import { findCategory, SURPRISE_THEME_POOL, BAND_MIN_LEVEL } from "@/lib/lesson-topics";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,24 @@ function isMathSubject(subject: string): boolean {
 
 function isSpellingSubject(subject: string): boolean {
   return /\bspell/i.test(subject);
+}
+
+const normText = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Pick a fresh item from a pool, skipping anything that overlaps what the
+ * student has already seen (topics or passage titles). Falls back to a pure
+ * random pick if everything has been used.
+ */
+function pickFresh(pool: string[], seen: string[]): string | null {
+  if (pool.length === 0) return null;
+  const seenNorm = seen.map(normText).filter(Boolean);
+  const fresh = pool.filter((item) => {
+    const n = normText(item);
+    return !seenNorm.some((s) => s.includes(n) || n.includes(s));
+  });
+  const candidates = fresh.length > 0 ? fresh : pool;
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 /** Pull the JSON object out of a model response, tolerating fences/prose. */
@@ -96,8 +115,9 @@ Rules:
 - correct_index is 0-based (0=A, 1=B, 2=C, 3=D) and MUST point to the genuinely correct option. Double-check every answer, especially math computations.
 - Calibrate rigor to the difficulty level — do NOT make a low-level lesson hard, and do NOT make a high-level lesson easy. The student should be able to pass at roughly 80% when the level is right.
 ${contentRules}
-- Age-appropriate and safe for K-12. No violence, adult themes, or sensitive content.
+- Age-appropriate and safe for K-12. No violence, adult themes, or sensitive content. NO sexual content of any kind, including human or animal reproduction — even at high-school difficulty, keep all content appropriate for an elementary student who might read it.
 - Make it specific and interesting, not generic.
+- VARIETY: do not fall back on your stock favorites (e.g. monarch butterflies, generic "community garden" stories). If a specific angle or theme is given below, use it exactly.
 - Generate a BRAND-NEW passage and brand-new questions every time. Do NOT reuse any passage, topic, or question wording listed as already-seen. (Re-testing a core skill like "main idea" on a NEW passage is fine.)`;
 }
 
@@ -391,6 +411,28 @@ export async function POST(request: Request) {
       : reading!.guidance;
     const passageWords = reading?.passageWords ?? null;
 
+    // ── Topic steering (variety fix) ──
+    // If the requested topic is a catalog category, rotate to a specific fresh
+    // angle within it so "Outer Space" is planets one day, astronauts the next.
+    // If no topic was chosen at all ("surprise me") on a passage subject, seed
+    // a fresh passage theme so the model can't cluster on stock favorites.
+    const seenText = [...priorTopics, ...priorPassageTitles];
+    let angleLine = "";
+    if (requestedTopic) {
+      const hit = findCategory(subject, requestedTopic);
+      if (hit) {
+        const angle = pickFresh(hit.category.angles, seenText);
+        if (angle) angleLine = `Specific angle for THIS lesson (use it): ${angle}.`;
+        if (BAND_MIN_LEVEL[hit.band] > level + 1) {
+          angleLine +=
+            " This topic is normally taught to older students — make it a gentle, accessible first introduction pitched at the target difficulty above, focusing on the big ideas.";
+        }
+      }
+    } else if (usePassage) {
+      const theme = pickFresh(SURPRISE_THEME_POOL, seenText);
+      if (theme) angleLine = `Passage theme for THIS lesson (use it): ${theme}.`;
+    }
+
     const systemPrompt = buildSystemPrompt(plan, {
       math,
       spelling,
@@ -403,7 +445,7 @@ export async function POST(request: Request) {
 Student's enrolled grade: ${grade}
 Target difficulty: ${levelToGradeLabel(level)} level (this is the student's measured working level — pitch the whole lesson here, NOT necessarily their enrolled grade).
 ${requestedTopic ? `Requested topic: ${requestedTopic}` : "Topic: you choose a fresh, engaging topic in this subject."}
-${goalText ? `This lesson should help the student toward their goal: "${goalText}"${goalStandard ? ` (standard ${goalStandard})` : ""}.` : ""}
+${angleLine ? `${angleLine}\n` : ""}${goalText ? `This lesson should help the student toward their goal: "${goalText}"${goalStandard ? ` (standard ${goalStandard})` : ""}.` : ""}
 ${exclusionBlock || "Nothing done yet — any fresh topic is fine."}
 
 Write a ${plan.total}-question lesson now${usePassage ? ", including the reading passage" : ""}. Match the target difficulty exactly — the student should pass at about 80% when it's right for them.`;
