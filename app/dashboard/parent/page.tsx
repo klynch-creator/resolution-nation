@@ -64,8 +64,9 @@ function LinkRequestForm({ onSuccess }: { onSuccess: () => void }) {
           marginBottom: "1.5rem",
         }}
       >
-        Ask your child to open <strong>Invite a Parent</strong> in their app and
-        share their 6-character invite code with you. Enter it below.
+        Ask your child to sign in, then tap <strong>Invite a Parent</strong> at
+        the bottom of their dashboard. They&apos;ll get a 6-character code —
+        enter it below.
       </p>
 
       {error && (

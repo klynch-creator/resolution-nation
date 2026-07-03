@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Star, Target, School, Layers, BookOpen, Sparkles, Mic, PenLine, Flame, Settings, Users } from "lucide-react";
+import { Star, Target, School, Layers, BookOpen, Sparkles, Mic, PenLine, Flame, Settings, Users, UserPlus } from "lucide-react";
 import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
 import Avatar from "@/app/dashboard/_components/Avatar";
 import { getTheme } from "@/lib/themes";
@@ -769,6 +769,42 @@ export default function StudentDashboard() {
             </Link>
           </div>
         )}
+
+        {/* Invite a parent */}
+        <Link href="/dashboard/student/invite-parent" style={{ textDecoration: "none" }}>
+          <div
+            className="card card-hover"
+            style={{
+              marginTop: "1.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+              padding: "1.25rem 1.5rem",
+              cursor: "pointer",
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <UserPlus size={30} color="#028090" aria-hidden="true" />
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-nunito), sans-serif",
+                    fontWeight: 800,
+                    color: "#0C2340",
+                    fontSize: "1.0625rem",
+                  }}
+                >
+                  Invite a Parent
+                </div>
+                <div style={{ color: "#64748B", fontSize: "0.875rem" }}>
+                  Get a code so your family can see your goals and progress
+                </div>
+              </div>
+            </div>
+            <span style={{ color: "#028090", fontWeight: 700, flexShrink: 0 }}>→</span>
+          </div>
+        </Link>
       </main>
     </div>
   );
