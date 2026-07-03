@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Star, Target, School, Layers, BookOpen, Sparkles, Mic, PenLine, Flame, Settings } from "lucide-react";
+import { Star, Target, School, Layers, BookOpen, Sparkles, Mic, PenLine, Flame, Settings, Users } from "lucide-react";
 import type { Profile, Pod, Goal, LearningRoadmap } from "@/types";
 import Avatar from "@/app/dashboard/_components/Avatar";
 import { getTheme } from "@/lib/themes";
@@ -292,6 +292,7 @@ export default function StudentDashboard() {
             { href: "/dashboard/student/lessons", label: "Lessons", active: false, Icon: BookOpen },
             { href: "/dashboard/student/writing", label: "Writing", active: false, Icon: PenLine },
             { href: "/dashboard/student/fluency", label: "Read Aloud", active: false, Icon: Mic },
+            { href: "/dashboard/student/class", label: "My Class", active: false, Icon: Users },
             { href: "/dashboard/student/store", label: "Store", active: false, Icon: Star },
             { href: "/dashboard/student/collection", label: "Collection", active: false, Icon: Layers },
           ].map((link) => (

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { computeMathSkills, parseMathDomain, type MathResponse } from "@/lib/analytics/skills";
+import { deriveTier } from "@/lib/adaptive";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,12 @@ interface StarTransaction {
   type: string;
 }
 
+interface SkillTierLite {
+  student_id: string;
+  subject: string;
+  level: number | string;
+}
+
 interface AnalyticsState {
   loading: boolean;
   students: StudentProfile[];
@@ -71,21 +78,24 @@ interface AnalyticsState {
   stars: StarTransaction[];
   lessons: LessonLite[];
   fluencyBests: number[]; // each student's best WCPM
+  tiers: SkillTierLite[]; // measured adaptive levels per student/subject
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function adaptiveLevel(
-  studentResponses: WorkoutResponse[]
+// Overall working level vs enrolled grade, from the adaptive engine's MEASURED
+// per-subject levels (student_skill_tiers.level). Replaces the old heuristic
+// that looked only at the difficulty mix of a student's last 10 questions —
+// which ignored whether answers were correct and routinely mislabeled students.
+function measuredAdaptiveLevel(
+  studentTiers: SkillTierLite[],
+  grade: string | null
 ): "Below" | "At" | "Above" {
-  const last10 = studentResponses.slice(-10);
-  if (last10.length === 0) return "At";
-  const counts: Record<string, number> = { easy: 0, medium: 0, hard: 0 };
-  last10.forEach((r) => {
-    if (r.difficulty) counts[r.difficulty]++;
-  });
-  const modal = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-  return modal === "easy" ? "Below" : modal === "hard" ? "Above" : "At";
+  if (studentTiers.length === 0) return "At";
+  const avg =
+    studentTiers.reduce((s, t) => s + Number(t.level), 0) / studentTiers.length;
+  const tier = deriveTier(avg, grade);
+  return tier === "below" ? "Below" : tier === "above" ? "Above" : "At";
 }
 
 function accuracy(responses: WorkoutResponse[]): number {
@@ -324,6 +334,7 @@ export default function TeacherAnalyticsPage() {
     stars: [],
     lessons: [],
     fluencyBests: [],
+    tiers: [],
   });
 
   useEffect(() => {
@@ -454,7 +465,18 @@ export default function TeacherAnalyticsPage() {
         stars = starData ?? [];
       }
 
-      setState({ loading: false, students, responses, goals, roadmaps, steps, stars, lessons, fluencyBests });
+      // 7. Measured adaptive levels for all students
+      let tiers: SkillTierLite[] = [];
+      if (studentIds.length > 0) {
+        const { data: tierData } = await supabase
+          .from("student_skill_tiers")
+          .select("student_id, subject, level")
+          .in("student_id", studentIds)
+          .not("level", "is", null);
+        tiers = tierData ?? [];
+      }
+
+      setState({ loading: false, students, responses, goals, roadmaps, steps, stars, lessons, fluencyBests, tiers });
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -465,7 +487,7 @@ export default function TeacherAnalyticsPage() {
     router.push("/");
   }
 
-  const { loading, students, responses, goals, roadmaps, steps, stars, lessons, fluencyBests } = state;
+  const { loading, students, responses, goals, roadmaps, steps, stars, lessons, fluencyBests, tiers } = state;
 
   // ── Computed stats ────────────────────────────────────────────────────────
 
@@ -494,8 +516,8 @@ export default function TeacherAnalyticsPage() {
   // Adaptive distribution
   const adaptiveDist = { below: 0, at: 0, above: 0 };
   students.forEach((s) => {
-    const sr = responses.filter((r) => r.user_id === s.userId);
-    const level = adaptiveLevel(sr);
+    const st = tiers.filter((t) => t.student_id === s.userId);
+    const level = measuredAdaptiveLevel(st, s.grade);
     if (level === "Below") adaptiveDist.below++;
     else if (level === "Above") adaptiveDist.above++;
     else adaptiveDist.at++;
@@ -595,7 +617,10 @@ export default function TeacherAnalyticsPage() {
       return {
         ...s,
         accuracy: accuracy(sr),
-        level: adaptiveLevel(sr),
+        level: measuredAdaptiveLevel(
+          tiers.filter((t) => t.student_id === s.userId),
+          s.grade
+        ),
         goalsCompleted: sGoals.filter((g) => g.status === "completed").length,
         goalsTotal: sGoals.length,
         hasData: sr.length > 0,

@@ -728,21 +728,28 @@ export default function LessonPlayerPage() {
           alignItems: "center",
           justifyContent: "center",
           padding: "1.5rem 1.25rem 2.5rem",
-          maxWidth: "680px",
+          // Passage lessons go side-by-side and use the whole screen.
+          maxWidth: lesson?.activities?.passage?.text ? "1500px" : "680px",
           margin: "0 auto",
           width: "100%",
         }}
       >
         {currentQ && (
-          <>
+          <div
+            className={
+              lesson?.activities?.passage?.text
+                ? "w-full grid gap-6 lg:grid-cols-2 items-start"
+                : "w-full"
+            }
+          >
             {lesson?.activities?.passage?.text && (
               <div
+                className="lg:sticky lg:top-4"
                 style={{
                   background: "white",
                   borderRadius: "16px",
                   padding: "1.25rem 1.5rem",
                   boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                  marginBottom: "1rem",
                   width: "100%",
                   borderLeft: "4px solid #028090",
                 }}
@@ -770,8 +777,8 @@ export default function LessonPlayerPage() {
                   />
                 </div>
                 <div
+                  className="max-h-[220px] lg:max-h-[calc(100vh-240px)]"
                   style={{
-                    maxHeight: "220px",
                     overflowY: "auto",
                     fontSize: "1rem",
                     color: "#374151",
@@ -783,6 +790,7 @@ export default function LessonPlayerPage() {
                 </div>
               </div>
             )}
+            <div className="flex flex-col items-center" style={{ width: "100%" }}>
             <div
               style={{
                 background: "white",
@@ -958,7 +966,8 @@ export default function LessonPlayerPage() {
                 )}
               </div>
             )}
-          </>
+            </div>
+          </div>
         )}
       </main>
     </div>

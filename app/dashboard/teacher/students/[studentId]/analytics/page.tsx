@@ -14,7 +14,7 @@ import {
   type MathResponse,
   type SkillBar,
 } from "@/lib/analytics/skills";
-import { levelToGradeLabel } from "@/lib/adaptive";
+import { levelToGradeLabel, deriveTier } from "@/lib/adaptive";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +79,7 @@ interface StudentStats {
   goalsTotal: number;
   totalStars: number;
   adaptiveLevel: "Below" | "At" | "Above";
+  adaptiveAvgLevel: number | null;
   weeklyAccuracy: { week: string; pct: number; total: number }[];
   // Promotional literacy standards.
   comprehension: { pct: number; hasData: boolean };
@@ -110,13 +111,18 @@ function accuracy(responses: WorkoutResponse[]): number {
   return Math.round((correct / responses.length) * 100);
 }
 
-function adaptiveLevel(responses: WorkoutResponse[]): "Below" | "At" | "Above" {
-  const last10 = responses.slice(-10);
-  if (last10.length === 0) return "At";
-  const counts: Record<string, number> = { easy: 0, medium: 0, hard: 0 };
-  last10.forEach((r) => { if (r.difficulty) counts[r.difficulty]++; });
-  const modal = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-  return modal === "easy" ? "Below" : modal === "hard" ? "Above" : "At";
+// Overall working level vs enrolled grade, from the adaptive engine's MEASURED
+// per-subject levels (student_skill_tiers.level). Replaces the old heuristic
+// that looked only at the difficulty mix of the last 10 questions — which
+// ignored whether answers were correct and routinely mislabeled students.
+function measuredAdaptiveLevel(
+  levels: { level: number }[],
+  grade: string | null
+): { label: "Below" | "At" | "Above"; avg: number | null } {
+  if (levels.length === 0) return { label: "At", avg: null };
+  const avg = levels.reduce((s, l) => s + l.level, 0) / levels.length;
+  const tier = deriveTier(avg, grade);
+  return { label: tier === "below" ? "Below" : tier === "above" ? "Above" : "At", avg };
 }
 
 // Get ISO week string "YYYY-Www" for a date
@@ -759,7 +765,8 @@ export default function StudentAnalyticsPage() {
         goalsCompleted: goals.filter((g) => g.status === "completed").length,
         goalsTotal: goals.length,
         totalStars,
-        adaptiveLevel: adaptiveLevel(responses),
+        adaptiveLevel: measuredAdaptiveLevel(levels, studentProfile.grade ?? null).label,
+        adaptiveAvgLevel: measuredAdaptiveLevel(levels, studentProfile.grade ?? null).avg,
         weeklyAccuracy,
         comprehension,
         writing,
@@ -935,7 +942,11 @@ export default function StudentAnalyticsPage() {
               <MiniStatCard
                 label="Adaptive Level"
                 value={stats.adaptiveLevel}
-                sub="last 10 responses"
+                sub={
+                  stats.adaptiveAvgLevel != null
+                    ? `≈ ${levelToGradeLabel(stats.adaptiveAvgLevel)}`
+                    : "no adaptive lessons yet"
+                }
                 color={levelColor}
               />
             </div>
