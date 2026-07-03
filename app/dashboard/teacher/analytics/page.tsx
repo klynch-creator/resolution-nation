@@ -370,15 +370,17 @@ export default function TeacherAnalyticsPage() {
       let students: StudentProfile[] = [];
       let studentIds: string[] = [];
       if (podIds.length > 0) {
+        // Only 'member' rows are students — linked parents sit in class pods
+        // as 'viewer' (for RLS) and must NOT appear in class analytics.
         const { data: members } = await supabase
           .from("pod_members")
-          .select("user_id, profiles(id, full_name, grade)")
+          .select("user_id, profiles(id, full_name, grade, role)")
           .in("pod_id", podIds)
-          .neq("role", "admin");
+          .eq("role", "member");
         (members ?? []).forEach(
-          (m: { user_id: string; profiles: { id: string; full_name: string; grade: string | null } | { id: string; full_name: string; grade: string | null }[] | null }) => {
+          (m: { user_id: string; profiles: { id: string; full_name: string; grade: string | null; role?: string } | { id: string; full_name: string; grade: string | null; role?: string }[] | null }) => {
             const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-            if (p) {
+            if (p && (p.role === undefined || p.role === "student")) {
               students.push({
                 userId: m.user_id,
                 name: p.full_name,

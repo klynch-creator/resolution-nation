@@ -93,10 +93,12 @@ export default function TeacherDashboard() {
 
     const podsWithCounts = await Promise.all(
       podsData.map(async (pod) => {
+        // Count only students ('member') — not parent viewers or admins.
         const { count } = await supabase
           .from("pod_members")
           .select("*", { count: "exact", head: true })
-          .eq("pod_id", pod.id);
+          .eq("pod_id", pod.id)
+          .eq("role", "member");
         return { ...pod, memberCount: count ?? 0 };
       })
     );
