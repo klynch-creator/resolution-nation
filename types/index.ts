@@ -31,6 +31,10 @@ export interface Profile {
   is_frozen?: boolean;
   frozen_at?: string | null;
   frozen_reason?: string | null;
+  contact_email?: string | null;
+  phone?: string | null;
+  preferred_language?: "en" | "es";
+  preferred_contact?: "app" | "email" | "phone";
 }
 
 export interface Pod {
@@ -404,9 +408,10 @@ export interface ParentMessage {
   teacher_id: string;
   parent_id: string;
   student_id: string;
-  title: string;
+  title: string | null;
   body_english: string;
   body_spanish: string | null;
+  sender_role: "teacher" | "parent";
   sent_at: string;
   read_at: string | null;
   created_at: string;

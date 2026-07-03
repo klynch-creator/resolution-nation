@@ -238,6 +238,12 @@ export default function TeacherDashboard() {
           <Link href="/dashboard/teacher/analytics" style={navLinkStyle(false)}>
             📊 Analytics
           </Link>
+          <Link href="/dashboard/teacher/messages" style={navLinkStyle(false)}>
+            💬 Messages
+          </Link>
+          <Link href="/dashboard/teacher/settings" style={navLinkStyle(false)}>
+            ⚙️ Settings
+          </Link>
         </div>
       </nav>
 
