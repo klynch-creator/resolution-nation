@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 // PATCH /api/approve-parent-link — teacher approves or denies a parent-student link
 export async function PATCH(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "approve-parent-link", limit: 20, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { linkId, action } = await request.json();
 

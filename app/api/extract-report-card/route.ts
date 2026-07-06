@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedReportCard } from "@/types";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const SYSTEM_PROMPT = `You are analyzing a student report card. Extract all subjects, grades/scores (and the grading scale), standard codes if present, and any teacher notes or comments. Return ONLY valid JSON in exactly this format, no other text:
 {
@@ -20,6 +21,9 @@ const SYSTEM_PROMPT = `You are analyzing a student report card. Extract all subj
 }`;
 
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "extract-report-card", limit: 10, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { fileUrl, fileType, studentId } = await request.json();
 

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedReportCard, GoalPriority, GoalSubject } from "@/types";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const SYSTEM_PROMPT = `You are an expert K-12 educator creating personalized learning goals for a student. Based on the student's report card data, generate specific, achievable learning goals written in student-friendly "I can..." language. Each goal should be something a child can understand and feel motivated by.
 
@@ -37,6 +38,9 @@ interface GeneratedGoal {
 }
 
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "generate-goals", limit: 10, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { uploadId, studentId, studentGrade } = await request.json();
 

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { IepProgressLevel } from "@/types";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const SYSTEM_PROMPT = `You are a special education teacher writing a formal progress note for a student's IEP. Write in professional, legally appropriate language suitable for DOE submission. Be specific about data from the student's work.
 
@@ -19,6 +20,9 @@ interface GeneratedProgressNote {
 }
 
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "generate-progress-note", limit: 10, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { goalText, timePeriod, studentId } = await request.json();
 

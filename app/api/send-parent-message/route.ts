@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 // POST /api/send-parent-message — teacher sends a message to a parent
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "send-parent-message", limit: 30, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { parentId, studentId, title, bodyEnglish, bodySpanish } =
       await request.json();

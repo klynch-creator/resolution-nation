@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { IepArea } from "@/types";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const SYSTEM_PROMPT = `You are a special education expert who writes legally compliant, measurable IEP goals. Generate 2-3 specific, measurable, achievable, relevant, and time-bound (SMART) IEP goals based on the teacher's input.
 
@@ -29,6 +30,9 @@ interface GeneratedIepGoal {
 }
 
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "generate-iep-goals", limit: 10, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { grade, subject, needs, currentPerformance } = await request.json();
 

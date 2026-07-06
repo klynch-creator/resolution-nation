@@ -1,12 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 // POST /api/link-parent-student — REMOVED (June 2026).
 // The old implementation enumerated all auth users via auth.admin.listUsers()
 // to find a child by email — a privacy and scaling hazard flagged in the May
 // 2026 security audit. Parents now link via a student-generated invite code:
 // POST /api/parent/link (redeem) + POST /api/parent/link/code (mint).
-export async function POST() {
+export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "link-parent-student", limit: 30, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   return NextResponse.json(
     {
       error:
@@ -17,7 +21,10 @@ export async function POST() {
 }
 
 // GET /api/link-parent-student — teacher fetches pending links for their students
-export async function GET() {
+export async function GET(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "link-parent-student", limit: 30, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const supabase = await createClient();
     const {

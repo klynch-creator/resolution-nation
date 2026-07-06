@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * Gift an owned star-store item to a classmate.
@@ -11,6 +12,9 @@ import { NextResponse } from "next/server";
  * inserts into star_transactions and user_inventory are blocked by RLS.
  */
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "gift-item", limit: 20, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { inventory_id, recipient_id } = await request.json();
 

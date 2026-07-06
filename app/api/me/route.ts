@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "me", limit: 60, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const {
     data: { user },

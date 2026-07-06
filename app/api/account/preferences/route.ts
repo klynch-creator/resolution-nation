@@ -3,6 +3,7 @@ import { getAdmin } from "@/lib/writing-moderation";
 import { NextResponse } from "next/server";
 import { THEMES } from "@/lib/themes";
 import { PRESET_AVATARS } from "@/lib/avatars";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ const PRESET_IDS = new Set(PRESET_AVATARS.map((a) => a.id));
 // Saves a student's dashboard preferences: theme and/or a PRESET avatar choice.
 // (Uploaded avatars go through /api/avatar/upload, which moderates first.)
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "account-preferences", limit: 30, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const supabase = await createClient();
     const {

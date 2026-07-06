@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "student-insight", limit: 10, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   const supabase = await createClient();
   const {
     data: { user },

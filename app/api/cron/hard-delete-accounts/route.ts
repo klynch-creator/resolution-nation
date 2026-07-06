@@ -154,10 +154,48 @@ export async function GET(request: Request) {
     }
   }
 
+  // ── Retention purges (data-minimization audit A3/A4) ────────────────────
+  // Best-effort: failures are reported but never block the deletion job.
+  const retention: Record<string, string> = {};
+
+  // A4: audit_log — privacy policy commits to a 2-year retention window.
+  try {
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 2);
+    const { error } = await admin
+      .from("audit_log")
+      .delete()
+      .lt("created_at", cutoff.toISOString());
+    retention.audit_log = error ? error.message : "purged > 2 years";
+  } catch (e) {
+    retention.audit_log = e instanceof Error ? e.message : "unknown error";
+  }
+
+  // A3: parent_link_codes — used or expired codes serve no purpose after 90 days.
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const iso = cutoff.toISOString();
+    const { error: usedErr } = await admin
+      .from("parent_link_codes")
+      .delete()
+      .lt("used_at", iso);
+    const { error: expiredErr } = await admin
+      .from("parent_link_codes")
+      .delete()
+      .is("used_at", null)
+      .lt("expires_at", iso);
+    retention.parent_link_codes =
+      usedErr?.message ?? expiredErr?.message ?? "purged used/expired > 90 days";
+  } catch (e) {
+    retention.parent_link_codes = e instanceof Error ? e.message : "unknown error";
+  }
+
   return NextResponse.json({
     processed: results.length,
     succeeded: results.filter((r) => r.ok).length,
     failed: results.filter((r) => !r.ok).length,
     results,
+    retention,
   });
 }

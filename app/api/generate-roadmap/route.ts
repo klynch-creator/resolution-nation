@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CurriculumExtract, RoadmapQuestion } from "@/types";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,9 @@ function extractJson(text: string): string {
 }
 
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "generate-roadmap", limit: 10, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { goalId, studentId, curriculumId } = await request.json();
 

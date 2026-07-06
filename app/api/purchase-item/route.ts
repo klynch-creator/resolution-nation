@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * Purchase a star-store item.
@@ -11,6 +12,9 @@ import { NextResponse } from "next/server";
  * and user_inventory are blocked by RLS (migration 016).
  */
 export async function POST(request: Request) {
+  const rl = checkRateLimit(request, { routeKey: "purchase-item", limit: 20, windowSec: 60 });
+  if (!rl.ok) return rateLimitResponse(rl);
+
   try {
     const { item_id } = await request.json();
 
