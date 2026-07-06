@@ -170,7 +170,7 @@ export default function StudentRoadmapPage() {
 
       {/* Nav */}
       <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
-        <div style={{ maxWidth: "720px", margin: "0 auto", display: "flex", height: "48px", alignItems: "stretch" }}>
+        <div className="nav-scroll" style={{ maxWidth: "720px", margin: "0 auto", display: "flex", height: "48px", alignItems: "stretch" }}>
           <Link
             href="/dashboard/student"
             style={{

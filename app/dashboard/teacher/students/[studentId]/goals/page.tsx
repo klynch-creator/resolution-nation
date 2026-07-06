@@ -463,7 +463,7 @@ export default function TeacherStudentGoalsPage() {
           padding: "0 2rem",
         }}
       >
-        <div
+        <div className="nav-scroll"
           style={{
             maxWidth: "1000px",
             margin: "0 auto",
@@ -579,8 +579,8 @@ export default function TeacherStudentGoalsPage() {
         </div>
 
         <div
-          className="grid"
-          style={{ gridTemplateColumns: "1fr 1fr", gap: "2rem", display: "grid" }}
+          className="grid-collapse-2"
+          style={{ gap: "2rem" }}
         >
           {/* Left: Create goal form */}
           <div>
@@ -629,7 +629,7 @@ export default function TeacherStudentGoalsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label style={labelStyle}>Subject *</label>
                     <select
@@ -1019,7 +1019,7 @@ export default function TeacherStudentGoalsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label style={labelStyle}>Subject *</label>
                   <select

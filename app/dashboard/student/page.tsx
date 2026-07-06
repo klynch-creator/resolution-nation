@@ -276,7 +276,7 @@ export default function StudentDashboard() {
 
       {/* Nav */}
       <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
-        <div
+        <div className="nav-scroll"
           style={{
             maxWidth: "760px",
             margin: "0 auto",

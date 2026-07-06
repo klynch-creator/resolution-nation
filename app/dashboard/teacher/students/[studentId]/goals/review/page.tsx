@@ -138,9 +138,8 @@ function GoalReviewCard({
 
       {/* Subject + Priority row */}
       <div
+        className="grid-collapse-2"
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
           gap: "0.75rem",
           marginBottom: "0.75rem",
         }}
@@ -179,9 +178,8 @@ function GoalReviewCard({
 
       {/* Standard code + Source row */}
       <div
+        className="grid-collapse-2"
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
           gap: "0.75rem",
         }}
       >

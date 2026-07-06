@@ -257,7 +257,7 @@ export default function TeacherRoadmapPage() {
 
       {/* Nav */}
       <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 2rem" }}>
-        <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", height: "48px", alignItems: "stretch" }}>
+        <div className="nav-scroll" style={{ maxWidth: "900px", margin: "0 auto", display: "flex", height: "48px", alignItems: "stretch" }}>
           <Link href="/dashboard/teacher" style={navLinkStyle(false)}>Dashboard</Link>
           <Link href="/dashboard/teacher/students" style={navLinkStyle(false)}>My Students</Link>
           <Link href={`/dashboard/teacher/students/${studentId}/goals`} style={navLinkStyle(false)}>

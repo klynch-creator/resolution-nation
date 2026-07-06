@@ -49,7 +49,7 @@ function NavBar({ active }: { active: string }) {
   ];
   return (
     <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
-      <div
+      <div className="nav-scroll"
         style={{
           maxWidth: "1100px",
           margin: "0 auto",
@@ -485,7 +485,7 @@ export default function CollectionPage() {
                               padding: "0.75rem",
                               fontSize: "0.8125rem",
                               lineHeight: 1.5,
-                              width: "240px",
+                              width: "min(240px, 70vw)",
                               zIndex: 10,
                               boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
                               pointerEvents: "none",

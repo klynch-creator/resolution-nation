@@ -219,7 +219,7 @@ export default function TeacherDashboard() {
           padding: "0 2rem",
         }}
       >
-        <div
+        <div className="nav-scroll"
           style={{
             maxWidth: "1000px",
             margin: "0 auto",

@@ -724,7 +724,7 @@ export default function TeacherAnalyticsPage() {
           padding: "0 2rem",
         }}
       >
-        <div
+        <div className="nav-scroll"
           style={{
             maxWidth: "1100px",
             margin: "0 auto",
@@ -1010,7 +1010,7 @@ export default function TeacherAnalyticsPage() {
                 <p>Students will appear here once they join your classroom.</p>
               </div>
             ) : (
-              <div className="card" style={{ overflow: "hidden", padding: 0 }}>
+              <div className="card table-scroll" style={{ padding: 0 }}>
                 <table
                   style={{
                     width: "100%",
@@ -1207,7 +1207,7 @@ export default function TeacherAnalyticsPage() {
                 </p>
               </div>
             ) : (
-              <div className="card" style={{ overflow: "hidden", padding: 0 }}>
+              <div className="card table-scroll" style={{ padding: 0 }}>
                 <table
                   style={{
                     width: "100%",

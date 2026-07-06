@@ -458,7 +458,7 @@ export default function IepPage() {
           className="no-print"
           style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 2rem" }}
         >
-          <div style={{ maxWidth: "1000px", margin: "0 auto", display: "flex", height: "48px", alignItems: "stretch", overflowX: "auto" }}>
+          <div className="nav-scroll" style={{ maxWidth: "1000px", margin: "0 auto", display: "flex", height: "48px", alignItems: "stretch", overflowX: "auto" }}>
             <Link href="/dashboard/teacher" style={navLink(false)}>Dashboard</Link>
             <Link href="/dashboard/teacher/students" style={navLink(false)}>My Students</Link>
             <Link href={`/dashboard/teacher/students/${studentId}/goals`} style={navLink(false)}>Goals</Link>
@@ -535,7 +535,7 @@ export default function IepPage() {
           {/* ── Tab: Generate Goals ─────────────────────────────────────────────── */}
           {activeTab === "generate" && (
             <div>
-              <div className="flex gap-6" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+              <div className="grid-collapse-2" style={{ gap: "1.5rem" }}>
                 {/* Input form */}
                 <div
                   className="card"
@@ -683,7 +683,7 @@ export default function IepPage() {
 
           {/* ── Tab: Progress Notes ─────────────────────────────────────────────── */}
           {activeTab === "notes" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "1.5rem" }}>
+            <div className="grid-collapse-wide" style={{ gap: "1.5rem" }}>
               <div className="card" style={{ borderTop: "4px solid #2563EB" }}>
                 <h2 style={{ fontFamily: "Georgia, serif", fontSize: "1.125rem", fontWeight: 700, color: "#0C2340", marginBottom: "1.25rem" }}>
                   Progress Note Generator
@@ -1093,7 +1093,7 @@ function DraftGoalCard({
           />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+        <div className="grid-collapse-2" style={{ gap: "0.75rem" }}>
           <div>
             <label style={fieldLabel}>Baseline</label>
             <input

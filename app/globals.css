@@ -187,6 +187,73 @@ button:focus-visible {
   animation: starPillPulse 0.6s ease-in-out 2;
 }
 
+/* ── Mobile / responsive helpers ───────────────────────────────────────── */
+
+img, video, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Horizontally scrollable wrapper for data tables on narrow screens */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll > table {
+  min-width: 560px;
+}
+
+/* Two-column grid that collapses to one column on phones.
+   Keep `display` and `gap` wherever they're already set (inline or class). */
+.grid-collapse-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.grid-collapse-wide {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+}
+
+@media (max-width: 640px) {
+  .grid-collapse-2,
+  .grid-collapse-wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Horizontally scrollable nav row (parent dashboard tabs, etc.) */
+.nav-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-scroll a {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Comfortable touch targets on touch devices */
+@media (pointer: coarse) {
+  .btn-primary,
+  .btn-secondary {
+    min-height: 44px;
+  }
+}
+
+/* Tighter card padding on small phones */
+@media (max-width: 480px) {
+  .card {
+    padding: 1rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 1.6s; }
   .card-hover, .card-hover:hover { transform: none; transition: none; }

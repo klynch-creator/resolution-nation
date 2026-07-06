@@ -131,7 +131,7 @@ export default function ParentLayout({
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span style={{ color: "#94A3B8", fontSize: "0.875rem" }}>
+          <span className="hidden sm:inline" style={{ color: "#94A3B8", fontSize: "0.875rem" }}>
             {profile?.full_name}
           </span>
           <button
@@ -157,7 +157,7 @@ export default function ParentLayout({
           padding: "0 1.5rem",
         }}
       >
-        <div
+        <div className="nav-scroll"
           style={{
             maxWidth: "900px",
             margin: "0 auto",

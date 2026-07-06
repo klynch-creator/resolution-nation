@@ -68,7 +68,7 @@ function NavBar({ active }: { active: string }) {
   ];
   return (
     <nav style={{ background: "white", borderBottom: "1px solid #E2E8F0", padding: "0 1.5rem" }}>
-      <div
+      <div className="nav-scroll"
         style={{
           maxWidth: "1100px",
           margin: "0 auto",

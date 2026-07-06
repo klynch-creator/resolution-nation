@@ -203,7 +203,7 @@ export default function ClassPage() {
         ) : (
           <>
             {/* Toggles */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               <div style={{ background: "#E2E8F0", borderRadius: "10px", padding: "4px", display: "flex", gap: "4px" }}>
                 <button style={tabBtn(win === "week")} onClick={() => setWin("week")}>
                   This Week
