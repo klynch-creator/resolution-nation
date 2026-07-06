@@ -14,6 +14,8 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("student");
   const [grade, setGrade] = useState("");
+  const [dob, setDob] = useState(""); // used only in-browser; never sent or stored
+  const [under13Blocked, setUnder13Blocked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -22,6 +24,26 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // COPPA age gate (RN-25). The date of birth is used ONLY here, in the
+    // browser, to compute age — it is never sent to the server or stored.
+    if (role === "student") {
+      if (!dob) {
+        setError("Please enter your date of birth.");
+        setLoading(false);
+        return;
+      }
+      const birth = new Date(dob);
+      const now = new Date();
+      let age = now.getFullYear() - birth.getFullYear();
+      const m = now.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+      if (age < 13) {
+        setUnder13Blocked(true);
+        setLoading(false);
+        return;
+      }
+    }
 
     const supabase = createClient();
 
@@ -33,7 +55,14 @@ export default function SignupPage() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: { full_name: fullName, role, grade: profileGrade },
+        data: {
+          full_name: fullName,
+          role,
+          grade: profileGrade,
+          ...(role === "student"
+            ? { is_under_13: "false", consent_track: "self_over_13" }
+            : {}),
+        },
       },
     });
 
@@ -70,6 +99,46 @@ export default function SignupPage() {
     //    the user confirms and the callback fires.
     setSuccess(true);
     setLoading(false);
+  }
+
+  if (under13Blocked) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ background: "#F7F9FC" }}
+      >
+        <div className="card text-center" style={{ maxWidth: "440px" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎒</div>
+          <h2
+            style={{
+              fontFamily: "Georgia, serif",
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "#0C2340",
+              marginBottom: "0.75rem",
+            }}
+          >
+            Ask your teacher to add you!
+          </h2>
+          <p style={{ color: "#475569", lineHeight: 1.6 }}>
+            Because you&apos;re under 13, a law called COPPA says a grown-up needs to
+            set up your account. Your teacher can add you to their class — ask them
+            to look for <strong>&ldquo;Import roster&rdquo;</strong> in Resolution Nation.
+            Family accounts (without a school) are coming soon.
+          </p>
+          <p style={{ color: "#64748B", fontSize: "0.8125rem", marginTop: "0.75rem" }}>
+            We didn&apos;t save anything you typed, including your birthday.
+          </p>
+          <Link
+            href="/"
+            className="btn-primary"
+            style={{ marginTop: "1.5rem", width: "100%" }}
+          >
+            Back to home
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (success) {
@@ -218,6 +287,41 @@ export default function SignupPage() {
                 <strong>Note for students under 13:</strong> COPPA requires that students
                 under 13 be added to Resolution Nation by a teacher or parent. If you&apos;re
                 under 13, please ask your teacher or parent to set up your account.
+              </div>
+            )}
+
+            {/* Age gate: DOB is used only in the browser to check age (RN-25) */}
+            {role === "student" && (
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    color: "#374151",
+                    marginBottom: "0.375rem",
+                  }}
+                >
+                  Date of birth
+                </label>
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  required
+                  max={new Date().toISOString().slice(0, 10)}
+                  style={{
+                    width: "100%",
+                    border: "1.5px solid #E2E8F0",
+                    borderRadius: "8px",
+                    padding: "0.625rem 0.875rem",
+                    fontSize: "1rem",
+                    background: "white",
+                  }}
+                />
+                <p style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: "0.25rem" }}>
+                  Used only to check your age — we never save your birthday.
+                </p>
               </div>
             )}
 

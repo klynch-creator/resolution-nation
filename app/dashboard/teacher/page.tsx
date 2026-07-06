@@ -526,6 +526,17 @@ export default function TeacherDashboard() {
                   >
                     🎒 View Students
                   </Link>
+                  <Link
+                    href={`/dashboard/teacher/roster?podId=${pod.id}`}
+                    className="btn-secondary"
+                    style={{
+                      padding: "0.5rem 0.875rem",
+                      fontSize: "0.875rem",
+                      textDecoration: "none",
+                    }}
+                  >
+                    📋 Import Roster
+                  </Link>
                 </div>
               </div>
             ))}
