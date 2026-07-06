@@ -45,3 +45,8 @@ next-env.d.ts
 # libreoffice lock files + scratch
 .~lock*
 .write-test
+
+# business documents — keep local, never commit
+Resolution_Nation_*.docx
+Resolution_Nation_*.xlsx
+Resolution_Nation_Publication_Package.md
