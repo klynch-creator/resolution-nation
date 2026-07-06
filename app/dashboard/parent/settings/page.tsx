@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import ProfileSettingsForm from "@/app/dashboard/_components/ProfileSettingsForm";
+import DataExportSection from "@/app/dashboard/_components/DataExportSection";
 
 export default function ParentSettingsPage() {
   return (
@@ -24,6 +25,7 @@ export default function ParentSettingsPage() {
         </p>
       </div>
       <ProfileSettingsForm />
+      <DataExportSection />
     </main>
   );
 }

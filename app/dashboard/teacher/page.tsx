@@ -38,6 +38,18 @@ export default function TeacherDashboard() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdPod, setCreatedPod] = useState<Pod | null>(null);
   const [copied, setCopied] = useState(false);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
+
+  async function rotateCode(podId: string) {
+    if (!confirm("Generate a new invite code? The old code will stop working immediately.")) return;
+    setRotatingId(podId);
+    const supabase = createClient();
+    const { data: newCode, error } = await supabase.rpc("rotate_pod_invite_code", { p_pod_id: podId });
+    if (!error && typeof newCode === "string") {
+      setPods((prev) => prev.map((p) => (p.id === podId ? { ...p, invite_code: newCode } : p)));
+    }
+    setRotatingId(null);
+  }
 
   useEffect(() => {
     async function load() {
@@ -493,6 +505,15 @@ export default function TeacherDashboard() {
                     style={{ padding: "0.5rem 0.875rem", fontSize: "0.875rem" }}
                   >
                     {copied ? "✓ Copied!" : "Copy"}
+                  </button>
+                  <button
+                    onClick={() => rotateCode(pod.id)}
+                    disabled={rotatingId !== null}
+                    className="btn-secondary"
+                    style={{ padding: "0.5rem 0.875rem", fontSize: "0.875rem" }}
+                    title="Generate a new invite code; the old one stops working"
+                  >
+                    {rotatingId === pod.id ? "…" : "↻ New code"}
                   </button>
                   <Link
                     href={`/dashboard/teacher/students?podId=${pod.id}`}
