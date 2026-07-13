@@ -31,6 +31,18 @@ function StudentsContent() {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [pendingLinks, setPendingLinks] = useState<PendingLink[]>([]);
   const [approvingLinkId, setApprovingLinkId] = useState<string | null>(null);
+  const [linkedStudentIds, setLinkedStudentIds] = useState<Set<string>>(new Set());
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [invite, setInvite] = useState<{
+    studentId: string;
+    code: string;
+    expiresAt: string;
+  } | null>(null);
+  const [inviteError, setInviteError] = useState<{
+    studentId: string;
+    message: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -185,6 +197,16 @@ function StudentsContent() {
         );
       }
 
+      // Which students already have an approved parent link? (RN-41 badge)
+      const { data: approvedLinks } = await supabase
+        .from("parent_student_links")
+        .select("student_id")
+        .in("student_id", studentIds)
+        .eq("status", "approved");
+      setLinkedStudentIds(
+        new Set((approvedLinks ?? []).map((l: { student_id: string }) => l.student_id))
+      );
+
       setLoading(false);
     }
     load();
@@ -268,9 +290,54 @@ function StudentsContent() {
       body: JSON.stringify({ linkId, action }),
     });
     if (res.ok) {
+      const approved = pendingLinks.find((l) => l.id === linkId);
       setPendingLinks((prev) => prev.filter((l) => l.id !== linkId));
+      if (action === "approve" && approved) {
+        setLinkedStudentIds((prev) => new Set(prev).add(approved.student_id));
+      }
     }
     setApprovingLinkId(null);
+  }
+
+  // RN-41: teacher mints a parent-link code for a student in their class.
+  async function handleInviteParent(studentId: string) {
+    setInvitingId(studentId);
+    setInviteError(null);
+    setCopied(false);
+    try {
+      const res = await fetch("/api/teacher/parent-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setInvite(null);
+        setInviteError({
+          studentId,
+          message: body.error ?? "Could not create an invite code.",
+        });
+      } else {
+        setInvite({ studentId, code: body.code, expiresAt: body.expiresAt });
+      }
+    } catch {
+      setInvite(null);
+      setInviteError({
+        studentId,
+        message: "Could not create an invite code.",
+      });
+    }
+    setInvitingId(null);
+  }
+
+  async function handleCopyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable (e.g. non-secure context) — code is visible to copy manually.
+    }
   }
 
   return (
@@ -494,6 +561,19 @@ function StudentsContent() {
                     <span style={{ fontSize: "0.8125rem" }}>
                       {uploadBadge(row.uploadStatus)}
                     </span>
+                    {linkedStudentIds.has(row.profile.id) && (
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#059669",
+                          background: "#ECFDF5",
+                          borderRadius: "100px",
+                          padding: "0.125rem 0.625rem",
+                        }}
+                      >
+                        👪 Parent linked
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -590,7 +670,109 @@ function StudentsContent() {
                   >
                     📄 Upload
                   </Link>
+                  <button
+                    onClick={() => handleInviteParent(row.profile.id)}
+                    disabled={invitingId === row.profile.id}
+                    style={{
+                      background: "white",
+                      color: "#D97706",
+                      border: "1.5px solid #D97706",
+                      borderRadius: "8px",
+                      padding: "0.375rem 0.875rem",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      cursor: invitingId === row.profile.id ? "default" : "pointer",
+                    }}
+                  >
+                    {invitingId === row.profile.id ? "…" : "👪 Invite Parent"}
+                  </button>
                 </div>
+
+                {/* RN-41: freshly minted parent invite code (shown once) */}
+                {invite?.studentId === row.profile.id && (
+                  <div
+                    style={{
+                      flexBasis: "100%",
+                      background: "#FFFBEB",
+                      border: "1px solid #FCD34D",
+                      borderRadius: "8px",
+                      padding: "0.875rem 1rem",
+                    }}
+                  >
+                    <div
+                      className="flex items-center gap-3 flex-wrap"
+                      style={{ marginBottom: "0.5rem" }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: "1.5rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.25em",
+                          color: "#0C2340",
+                          background: "white",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "8px",
+                          padding: "0.25rem 0.75rem",
+                        }}
+                      >
+                        {invite.code}
+                      </span>
+                      <button
+                        onClick={() => handleCopyCode(invite.code)}
+                        style={{
+                          background: "#028090",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "8px",
+                          padding: "0.4375rem 0.875rem",
+                          fontSize: "0.8125rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {copied ? "✓ Copied" : "Copy code"}
+                      </button>
+                      <button
+                        onClick={() => setInvite(null)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#94A3B8",
+                          fontSize: "0.8125rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                    <p style={{ fontSize: "0.8125rem", color: "#92400E" }}>
+                      Share this code with {row.profile.full_name}&apos;s
+                      parent or guardian. They enter it at{" "}
+                      <strong>resolutionnation.app/parent/link</strong> after
+                      creating a parent account. Because you created this
+                      invite, the link is approved automatically — no extra
+                      approval step. Expires{" "}
+                      {new Date(invite.expiresAt).toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                      })}
+                      ; creating a new code replaces this one.
+                    </p>
+                  </div>
+                )}
+                {inviteError?.studentId === row.profile.id && (
+                  <p
+                    style={{
+                      flexBasis: "100%",
+                      fontSize: "0.8125rem",
+                      color: "#DC2626",
+                    }}
+                  >
+                    {inviteError.message}
+                  </p>
+                )}
               </div>
             ))}
           </div>
