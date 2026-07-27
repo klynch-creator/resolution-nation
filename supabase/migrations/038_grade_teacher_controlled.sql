@@ -1,0 +1,41 @@
+-- ============================================================
+-- 038 — Grade level is teacher-controlled
+--
+-- `profiles.grade` is a grade LEVEL ("3" = third grade), not a report-card
+-- mark. Report-card scores live in the extracted report-card payload and never
+-- touch this column.
+--
+-- PROBLEM
+-- A student could change their own grade level via a direct PATCH. No UI
+-- exposed it (ProfileSettingsForm only writes name and contact fields), but
+-- the column grant allowed it. This is not a data-disclosure issue — it's an
+-- academic-integrity one. `grade` drives:
+--   * adaptive lesson tier selection      (lib/adaptive.ts)
+--   * fluency WCPM norm lookup            (lib/fluency/norms.ts)
+--   * AI goal / IEP / progress-note prompts
+-- so changing it silently shifts the difficulty of assigned work and the
+-- benchmark a reading score is measured against — and those numbers end up in
+-- IEP progress notes submitted to the DOE.
+--
+-- FIX
+-- Revoke UPDATE (grade) from `authenticated`. Grade now rests solely with the
+-- teacher.
+--
+-- WHAT STILL WORKS
+--   * Signup: INSERT is untouched, so the signup form and the
+--     handle_new_user trigger still set an initial grade at account creation.
+--   * Roster import: already writes grade with the service-role client.
+--   * Teacher edits: POST /api/teacher/student-grade — verifies the
+--     teacher-student relationship via requireTeacherOfStudent(), validates
+--     against the canonical list in lib/grades.ts, writes with the service
+--     role, and records an audit_log entry.
+--
+-- OPEN PRODUCT QUESTION (not decided here)
+-- Self-signup students still choose their own grade on the signup form. For
+-- school-track accounts that's moot — the teacher creates them via roster
+-- import. If grade should be teacher-set from the very start, the signup
+-- field should be removed for the student role too. Left as-is because it
+-- changes the onboarding flow, not the security posture.
+-- ============================================================
+
+REVOKE UPDATE (grade) ON public.profiles FROM authenticated;

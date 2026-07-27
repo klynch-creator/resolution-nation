@@ -194,8 +194,11 @@ export async function POST(request: Request) {
       },
     });
   } catch (e) {
+    // Security review 2026-07-26 (L5): don't return raw error text. Supabase
+    // and Postgres errors carry table, column and constraint names.
+    console.error("Parent export error:", e);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Export failed." },
+      { error: "Export failed. Please try again, or email privacy@resolutionnation.app." },
       { status: 500 }
     );
   }

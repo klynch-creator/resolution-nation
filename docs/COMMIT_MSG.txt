@@ -1,0 +1,79 @@
+Security review remediation: Critical + 3 High + 6 Medium/Low
+
+Backend security review (docs/security-review-2026-07-26.md), verified
+against live Supabase prod rather than migration files alone.
+
+DATABASE (migrations 035-037, already applied to prod):
+
+- C1 CRITICAL: students could unfreeze their own moderation-locked
+  account. profiles_update_own had no column restriction and the trigger
+  guarded only `role`, so a PATCH to is_frozen defeated the child-safety
+  lockout the writing moderation depends on. The same hole allowed
+  rewriting is_under_13 / consent_track, which are the only record of
+  each account's COPPA consent basis. Note: 035's column-level REVOKE
+  was a silent no-op against an existing table-level grant; 035b drops
+  the table grant and re-grants only the eight user-owned columns.
+
+- H2: report-cards and curricula storage INSERT policies were not bound
+  to the caller's folder, so any authenticated user could write into any
+  other user's prefix — including planting a file a teacher-facing AI
+  route would later download and feed to Claude. All buckets are now
+  folder-scoped with size and MIME limits.
+
+- M1: write_audit was EXECUTE-able by authenticated with fully
+  caller-controlled action/target/metadata, allowing forgery of the
+  Ed Law 2-d audit record. Revoked outright — it has zero client callers
+  and is only invoked from DEFINER functions.
+
+- Also fixed: resolve_moderation_flag authorized via "teacher has a goal
+  for this student", so roster-imported students with no goals yet were
+  permanently unfreezable by anyone. Broadened to goal OR shared pod,
+  and the unfreeze is now audit-logged.
+
+CODE:
+
+- H1: roster-import passwords used Math.random() over a 9,000-value
+  keyspace with guessable usernames. Now crypto.randomInt over
+  36,864,000 combinations, same readable login-card format.
+
+- H3: .gitignore now denies *.pdf and credential-shaped filenames. The
+  repo root had held Mercury bank 2FA backup codes, untracked but one
+  `git add -A` from permanent history.
+
+- M2: /api/student-insight was effectively an open Claude proxy — auth
+  check only, no system prompt, arbitrary client JSON interpolated into
+  the prompt. Now teacher-only, relationship-verified, with a new
+  lib/prompt-safety.ts bounding depth/length/charset and a system prompt
+  scoping the output.
+
+- M3: rate limiter keyed on the first x-forwarded-for entry, which the
+  client controls, so header rotation defeated every limit in the app.
+  Now prefers platform-set headers, else the last hop.
+
+- M5: cron secret no longer accepted via query string (query strings are
+  logged); constant-time comparison. BREAKING for any external scheduler
+  using ?token= — must send Authorization: Bearer.
+
+- L3: new lib/authz.ts requireTeacherOfStudent() wired into
+  student-insight, draft-parent-update, generate-progress-note and
+  extract-report-card. These were not leaking, but the check was
+  incidental to RLS rather than explicit.
+
+- L4/L5: corrected report-card "anonymization" labelling that overclaimed
+  what it did; stopped returning raw error text to clients.
+
+- Grade level is now teacher-controlled (migration 038). profiles.grade
+  drives adaptive lesson tier and fluency WCPM norms, and those numbers
+  feed IEP progress notes — a student changing their own grade silently
+  shifts both the difficulty of assigned work and the benchmark their
+  reading is measured against. UPDATE (grade) revoked from authenticated;
+  new POST /api/teacher/student-grade is relationship-checked, validated
+  against lib/grades.ts, and audit-logged. Signup INSERT is unaffected.
+  No teacher UI calls the route yet.
+
+Verified: live test as role `authenticated` with a student's JWT confirms
+self-unfreeze, role escalation and consent rewrite are all blocked while
+normal profile edits still work; tsc clean; Supabase advisors show no new
+findings.
+
+Follow-ups requiring manual action: docs/security-followups-kaelan.md

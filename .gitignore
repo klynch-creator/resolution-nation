@@ -50,3 +50,16 @@ next-env.d.ts
 Resolution_Nation_*.docx
 Resolution_Nation_*.xlsx
 Resolution_Nation_Publication_Package.md
+
+# Credentials, financial, and legal documents — NEVER commit.
+# Deny-by-default on PDFs: this repo has held bank 2FA backup codes and the
+# EIN letter in the project root, one `git add -A` away from being permanent
+# git history. Add an explicit `!` exception below if a PDF ever needs tracking.
+*.pdf
+*backup-code*
+*backup_code*
+*recovery-code*
+*recovery_code*
+*-EIN*
+secrets/
+credentials/

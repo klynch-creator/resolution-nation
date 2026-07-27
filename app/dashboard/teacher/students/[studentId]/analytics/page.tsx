@@ -787,7 +787,7 @@ export default function StudentAnalyticsPage() {
       const res = await fetch("/api/student-insight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentStats: stats }),
+        body: JSON.stringify({ studentId, studentStats: stats }),
       });
       const { insight: text } = await res.json();
       setInsight(text);

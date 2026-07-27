@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { IepProgressLevel } from "@/types";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { requireTeacherOfStudent } from "@/lib/authz";
 
 const SYSTEM_PROMPT = `You are a special education teacher writing a formal progress note for a student's IEP. Write in professional, legally appropriate language suitable for DOE submission. Be specific about data from the student's work.
 
@@ -40,6 +41,14 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
+
+    // Security review 2026-07-26 (L3): explicit teacher-student check. This
+    // route drafts IEP progress notes for DOE submission — the relationship
+    // should be asserted here, not left to RLS on the stats query below.
+    const authz = await requireTeacherOfStudent(user.id, studentId);
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status });
     }
 
     // Gather recent workout accuracy stats for this student

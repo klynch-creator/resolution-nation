@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -53,12 +54,27 @@ async function listAllPaths(
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Constant-time secret comparison. Length is compared separately because
+ * timingSafeEqual throws on differing buffer lengths.
+ */
+function secretMatches(provided: string | null, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export async function GET(request: Request) {
-  // Vercel Cron sends a bearer token equal to process.env.CRON_SECRET.
-  // External schedulers should pass ?token=<CRON_SECRET>.
+  // Security review 2026-07-26 (M5): the `?token=` query-string fallback was
+  // removed. This route hard-deletes accounts and purges the audit log, and
+  // query strings land in Vercel access logs, browser history, and any
+  // intermediate proxy log — the secret should never travel somewhere that
+  // records it. Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`, so
+  // the header path is the only one needed. External schedulers must send the
+  // same header. Comparison is constant-time.
   const authHeader = request.headers.get("authorization");
-  const url = new URL(request.url);
-  const tokenParam = url.searchParams.get("token");
   const expected = process.env.CRON_SECRET;
 
   if (!expected) {
@@ -68,11 +84,11 @@ export async function GET(request: Request) {
     );
   }
 
-  const provided =
-    (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null) ??
-    tokenParam;
+  const provided = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7).trim()
+    : null;
 
-  if (provided !== expected) {
+  if (!secretMatches(provided, expected)) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 

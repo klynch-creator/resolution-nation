@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedReportCard } from "@/types";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { requireTeacherOfStudent } from "@/lib/authz";
 
 const SYSTEM_PROMPT = `You are analyzing a student report card. Extract all subjects, grades/scores (and the grading scale), standard codes if present, and any teacher notes or comments. Return ONLY valid JSON in exactly this format, no other text:
 {
@@ -41,6 +42,13 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
+
+    // Security review 2026-07-26 (L3): assert the teacher-student relationship
+    // before reading a report card and sending its contents to Anthropic.
+    const authz = await requireTeacherOfStudent(user.id, studentId);
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status });
     }
 
     // Download file from Supabase Storage
@@ -86,9 +94,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Strip any mention of student name to avoid sending PII
-    // (We can't know the name ahead of time, so we instruct Claude to handle it)
-    const anonymizedText = rawText.replace(
+    // Security review 2026-07-26 (L4): this used to be labelled as PII
+    // stripping. It is not, and the comment was misleading in a way that could
+    // become a misstatement on a district security questionnaire.
+    //
+    // The regex matches one literal label format and a single whitespace-
+    // delimited token. It does not catch "Name:", a name in a page header, a
+    // first-and-last name, or a student ID — and the full report-card text is
+    // sent to Anthropic regardless, with the system prompt explicitly asking
+    // for `student_name` back.
+    //
+    // Sending it is fine: report-card processing is a legitimate purpose and
+    // Anthropic is a subprocessor under the DPA. What matters is that the
+    // privacy documentation says so plainly. The substitution is kept only as
+    // best-effort noise reduction — do not describe it as anonymization.
+    const bestEffortRedacted = rawText.replace(
       /student(?:\s+name)?:\s*\S+/gi,
       "student: [REDACTED]"
     );
@@ -102,7 +122,7 @@ export async function POST(request: Request) {
       model: "claude-sonnet-4-6",
       max_tokens: 2000,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: anonymizedText }],
+      messages: [{ role: "user", content: bestEffortRedacted }],
     });
 
     const content = message.content[0];

@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -22,13 +23,54 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 const MAX_STUDENTS = 40;
 const EMAIL_DOMAIN = "students.resolutionnation.app";
 
-const WORDS_A = ["blue", "red", "gold", "green", "swift", "brave", "lucky", "sunny", "cosmic", "mighty"];
-const WORDS_B = ["tiger", "eagle", "comet", "river", "maple", "falcon", "panda", "rocket", "otter", "dragon"];
+/**
+ * Password generation (security review 2026-07-26, H1).
+ *
+ * The original generator drew from 10 adjectives x 10 nouns x a 2-digit
+ * number = 9,000 possible passwords, using Math.random(). Two problems:
+ * the keyspace was small enough to exhaust, and Math.random() is not a
+ * CSPRNG — V8's xorshift128+ internal state is recoverable from a handful
+ * of observed outputs, so a teacher who imports one roster and reads 40
+ * passwords could predict passwords minted for other classes on the same
+ * serverless instance. Usernames are derived from names on a class list
+ * and are not secret, so the password is the only real barrier to a
+ * child's full education record.
+ *
+ * Now: 64 x 64 x 9000 = 36,864,000 combinations (~4,100x the old keyspace),
+ * drawn from crypto.randomInt (CSPRNG, rejection-sampled, unbiased).
+ * Format stays readable for a K-8 login card: `swift-otter-4821`, 16
+ * characters, three chunks, no ambiguous glyphs.
+ *
+ * Word lists deliberately avoid: homophones, anything that could combine
+ * into a phrase a child would be teased about, and letters that are easy
+ * to confuse when copying off a printed card.
+ */
+const WORDS_A = [
+  "blue", "red", "gold", "green", "swift", "brave", "lucky", "sunny",
+  "cosmic", "mighty", "jolly", "kind", "bright", "calm", "clever", "eager",
+  "fancy", "gentle", "happy", "humble", "jazzy", "keen", "lively", "loyal",
+  "merry", "noble", "peppy", "proud", "quick", "quiet", "royal", "sharp",
+  "shiny", "silver", "smooth", "snappy", "solid", "sparkly", "spry", "steady",
+  "sturdy", "sleek", "super", "tidy", "true", "upbeat", "vivid", "warm",
+  "wise", "witty", "zesty", "amber", "coral", "crisp", "daring", "epic",
+  "fresh", "glad", "grand", "hardy", "ideal", "joyful", "nimble", "polite",
+] as const;
+
+const WORDS_B = [
+  "tiger", "eagle", "comet", "river", "maple", "falcon", "panda", "rocket",
+  "otter", "dragon", "acorn", "anchor", "badger", "bamboo", "beacon", "bison",
+  "boulder", "bridge", "canyon", "cedar", "cheetah", "cobra", "condor", "coral",
+  "cricket", "dolphin", "ember", "firefly", "ferret", "garden", "geyser", "glacier",
+  "harbor", "heron", "island", "jaguar", "kestrel", "lantern", "lizard", "lotus",
+  "meadow", "meteor", "moose", "nebula", "orchid", "osprey", "penguin", "pepper",
+  "planet", "prairie", "puffin", "quartz", "rabbit", "raccoon", "salmon", "sequoia",
+  "sparrow", "summit", "thunder", "tundra", "turtle", "walrus", "willow", "zebra",
+] as const;
 
 function genPassword(): string {
-  const a = WORDS_A[Math.floor(Math.random() * WORDS_A.length)];
-  const b = WORDS_B[Math.floor(Math.random() * WORDS_B.length)];
-  const n = Math.floor(Math.random() * 90) + 10;
+  const a = WORDS_A[randomInt(WORDS_A.length)];
+  const b = WORDS_B[randomInt(WORDS_B.length)];
+  const n = randomInt(1000, 10000); // 4 digits, never zero-padded
   return `${a}-${b}-${n}`;
 }
 
@@ -109,14 +151,30 @@ export async function POST(request: Request) {
       }
 
       // Unique local-part: first initial + last name + 2 digits.
+      // Usernames are not secret (they're derivable from a class list), but
+      // use the CSPRNG here too so the suffix can't be correlated with the
+      // password stream generated on the same instance.
       let local = "";
       for (let tries = 0; tries < 20; tries++) {
-        const candidate = `${slug(firstName).slice(0, 1)}${slug(lastName).slice(0, 12)}${Math.floor(Math.random() * 90) + 10}`;
+        const candidate = `${slug(firstName).slice(0, 1)}${slug(lastName).slice(0, 12)}${randomInt(10, 100)}`;
         if (!usedLocal.has(candidate)) {
           local = candidate;
           usedLocal.add(candidate);
           break;
         }
+      }
+      if (!local) {
+        // 20 collisions on the same name — surface it rather than attempting
+        // to create an account with an "@domain" email and a cryptic error.
+        results.push({
+          fullName,
+          grade,
+          username: "",
+          password: "",
+          ok: false,
+          error: "Could not generate a unique username. Add a middle initial and retry.",
+        });
+        continue;
       }
       const email = `${local}@${EMAIL_DOMAIN}`;
       const password = genPassword();
@@ -172,9 +230,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ podName: pod.name, succeeded, failed: results.length - succeeded, results });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Import failed." },
-      { status: 500 }
-    );
+    // Security review 2026-07-26 (L5): log the detail, return a generic
+    // message. Per-row `results[].error` values are still surfaced — those are
+    // actionable for the teacher and are generated by this route, not raw
+    // database text.
+    console.error("Roster import error:", e);
+    return NextResponse.json({ error: "Import failed. Please try again." }, { status: 500 });
   }
 }

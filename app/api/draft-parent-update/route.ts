@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { requireTeacherOfStudent } from "@/lib/authz";
 
 const SYSTEM_PROMPT = `Write a brief, encouraging parent update about their child's learning progress. Use simple, jargon-free language. Avoid educational acronyms. Be positive and specific.
 
@@ -28,6 +29,17 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    }
+
+    // Security review 2026-07-26 (L3): assert the teacher-student relationship
+    // explicitly. The queries below run in the caller's RLS context and so
+    // already return nothing for an unrelated caller, but that is incidental —
+    // if this route is ever switched to the admin client (as several others
+    // were, to dodge the pod_members RLS recursion) it would silently become
+    // an IDOR with nothing in review to catch it.
+    const authz = await requireTeacherOfStudent(user.id, studentId);
+    if (!authz.ok) {
+      return NextResponse.json({ error: authz.error }, { status: authz.status });
     }
 
     // Gather recent workout stats

@@ -10,10 +10,7 @@ import { NextResponse } from "next/server";
  * across regions, swap the bucket store for Upstash Redis or
  * Vercel KV — keep the same checkRateLimit signature.
  *
- * Identifier hierarchy:
- *   1. Forwarded client IP from x-forwarded-for / x-real-ip.
- *   2. Falls back to a fixed bucket name (less protective but
- *      stops the simplest abuse).
+ * Identifier hierarchy — see clientIp() for why the order matters.
  *
  * Buckets are keyed by `${routeKey}:${identifier}`.
  */
@@ -107,10 +104,38 @@ export function rateLimitResponse(result: RateLimitResult) {
   );
 }
 
+/**
+ * Resolve a rate-limit identity that the caller cannot forge.
+ *
+ * Security review 2026-07-26 (M3): this previously read
+ * `x-forwarded-for.split(",")[0]`, i.e. the entry FURTHEST from our
+ * infrastructure. A client can set that header themselves — Vercel appends to
+ * it rather than replacing it — so rotating the value gave an attacker a fresh
+ * bucket on every request and defeated every rate limit in the app, including
+ * the ones guarding Anthropic spend and bulk PII egress via /api/parent/export.
+ *
+ * Order of preference:
+ *   1. `x-vercel-forwarded-for` — set by Vercel's edge, not client-settable.
+ *   2. `x-real-ip` — also set by the platform on Vercel.
+ *   3. LAST entry of `x-forwarded-for` — the hop nearest our infrastructure,
+ *      which is the one the platform appended. Never the first.
+ *
+ * If none are present (local dev, or an unexpected deployment target) we fall
+ * back to a single shared "unknown" bucket. That is deliberately conservative:
+ * it over-limits rather than under-limits.
+ */
 function clientIp(request: Request): string {
+  const vercel = request.headers.get("x-vercel-forwarded-for");
+  if (vercel) return vercel.split(",").pop()?.trim() || "unknown";
+
+  const real = request.headers.get("x-real-ip");
+  if (real) return real.trim();
+
   const xff = request.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]?.trim() ?? "unknown";
-  const xri = request.headers.get("x-real-ip");
-  if (xri) return xri.trim();
+  if (xff) {
+    const hops = xff.split(",").map((h) => h.trim()).filter(Boolean);
+    if (hops.length > 0) return hops[hops.length - 1];
+  }
+
   return "unknown";
 }

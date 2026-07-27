@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { GRADES, gradeLabel } from "@/lib/grades";
 import type { Role } from "@/types";
 
 export default function SignupPage() {
@@ -387,13 +388,11 @@ export default function SignupPage() {
                   onChange={(e) => setGrade(e.target.value)}
                 >
                   <option value="">Select your grade</option>
-                  {["K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map(
-                    (g) => (
-                      <option key={g} value={g}>
-                        {g === "K" ? "Kindergarten" : `Grade ${g}`}
-                      </option>
-                    )
-                  )}
+                  {GRADES.map((g) => (
+                    <option key={g} value={g}>
+                      {gradeLabel(g)}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
